@@ -1,17 +1,17 @@
 use super::*;
 
 pub struct CDBReader<'c> {
-    data: &'c [u8],
+    pub data: &'c [u8],
     tables: [PosLen; ENTRIES],
 }
 
 pub struct FileIter<'c> {
-    cdb: &'c CDBReader<'c>,
+    pub cdb: &'c CDBReader<'c>,
     pos: usize,
 }
 
 pub struct LookupIter<'c, 'k> {
-    cdb: &'c CDBReader<'c>,
+    pub cdb: &'c CDBReader<'c>,
     table: &'c PosLen,
     key: &'k [u8],
     khash: CDBHash,
@@ -38,7 +38,7 @@ impl<'c> Iterator for FileIter<'c> {
 impl<'c, 'k> LookupIter<'c, 'k> {
     fn new(cdb: &'c CDBReader, key: &'k [u8]) -> Self
     {
-        let khash = CDBHash::new(&key);
+        let khash = CDBHash::new(key);
         let table = &cdb.tables[khash.table()];
 
         let start_pos = if table.len != 0 {
@@ -118,7 +118,7 @@ impl<'c> CDBReader<'c> {
             }
         }
 
-        Ok(CDBReader{data: &data, tables: tables})
+        Ok(CDBReader{data: data, tables: tables})
     }
 
     fn get_data(&self, pos: usize) -> (&[u8], &[u8], usize)
@@ -140,11 +140,11 @@ impl<'c> CDBReader<'c> {
 
     pub fn lookup<'k>(&'c self, key: &'k [u8]) -> LookupIter<'c, 'k>
     {
-        LookupIter::new(&self, key)
+        LookupIter::new(self, key)
     }
 
     pub fn get<'k>(&'c self, key: &'k [u8]) -> Option<&[u8]>
     {
-        self.lookup(&key).nth(0)
+        self.lookup(key).nth(0)
     }
 }

@@ -1,6 +1,8 @@
 mod read;
+mod write;
 
 pub use self::read::{CDBReader, FileIter, LookupIter};
+pub use self::write::{CDBWriter};
 
 const ENTRIES: usize = 256;
 const INT_SIZE: usize = 4;
@@ -25,7 +27,7 @@ impl CDBHash
 {
     fn new(d: &[u8]) -> Self
     {
-        let h = d.iter().fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ (c as u32));
+        let h = d.iter().fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
         CDBHash(h)
     }
 
@@ -40,11 +42,17 @@ impl CDBHash
     }
 }
 
+impl std::fmt::Debug for CDBHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CDBHash(0x{:08x})", self.0)
+    }
+}
+
 impl PartialEq for CDBHash
 {
     fn eq(&self, other: &Self) -> bool
     {
-        return self.0 == other.0;
+        self.0 == other.0
     }
 }
 
@@ -52,13 +60,16 @@ impl<'a> From<&'a CDBHash> for u32
 {
     fn from(h : &'a CDBHash) -> Self
     {
-        return h.0;
+        h.0
     }
 }
 
 fn read_cdb_int(d: &[u8]) -> u32
 {
-    u32::from_le((d[0] as u32) | (d[1] as u32) << 8 |  (d[2] as u32) << 16 | (d[3] as u32) << 24)
+    u32::from_le(u32::from(d[0]) |
+                 u32::from(d[1]) << 8 |
+                 u32::from(d[2]) << 16 |
+                 u32::from(d[3]) << 24)
 }
 
 fn read_cdb_usize(d: &[u8]) -> usize
