@@ -84,7 +84,7 @@ impl<'c, T: Write + Seek> CDBWriter<'c, T>
 
     pub fn finish(&mut self) -> Result<(), std::io::Error>
     {
-        let mut tout = Vec::<[u32; 2]>::new();
+        let mut tout = Vec::new();
 
         for (i, table) in self.tables.iter().enumerate() {
             let tlen = table.len() * FILLFACTOR;
@@ -102,7 +102,6 @@ impl<'c, T: Write + Seek> CDBWriter<'c, T>
                     }
                 }
             }
-            self.header[i] = PosLen{pos: self.pos as usize, len: tout.len()};
             self.header[i] = PosLen{pos: self.pos as usize, len: tout.len()};
             for row in &tout {
                 self.file.write_all(&usize_to_bytes(row[0] as usize)[..])?;
