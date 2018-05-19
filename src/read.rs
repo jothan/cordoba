@@ -117,7 +117,7 @@ impl<'c> CDBReader<'c> {
             }
         }
 
-        Ok(CDBReader{data: data, tables: tables})
+        Ok(CDBReader{data, tables})
     }
 
     fn get_data(&self, pos: usize) -> (&[u8], &[u8], usize)

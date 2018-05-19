@@ -11,7 +11,6 @@ pub use self::read::{CDBReader, FileIter, LookupIter};
 pub use self::write::{CDBWriter};
 
 const ENTRIES: usize = 256;
-const INT_SIZE: usize = 4;
 const PAIR_SIZE: usize = 8;
 
 #[derive(Copy, Clone)]
@@ -51,14 +50,6 @@ impl CDBHash
 impl std::fmt::Debug for CDBHash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "CDBHash(0x{:08x})", self.0)
-    }
-}
-
-impl PartialEq for CDBHash
-{
-    fn eq(&self, other: &Self) -> bool
-    {
-        self.0 == other.0
     }
 }
 
