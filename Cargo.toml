@@ -3,9 +3,9 @@ name = "cdb"
 version = "0.1.0"
 authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
 
-[[bin]]
-name = "cdb"
-path = "src/main.rs"
+[profile.release]
+panic = "abort"
 
 [dependencies]
 memmap = "0.6.1"
+byteorder = "1"

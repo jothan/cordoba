@@ -75,18 +75,17 @@ impl<'c, 'k> Iterator for LookupIter<'c, 'k> {
             }
             self.nlookups += 1;
 
-            let ptr = read_cdb_usize(&self.cdb.data[pos+INT_SIZE..]);
+            let (hash, ptr) = read_cdb_pair(&self.cdb.data[pos..]);
             if ptr == 0 {
                 self.done = true;
                 return None;
             }
 
-            let hash = read_cdb_int(&self.cdb.data[pos..]);
             if hash != self.khash.0 {
                 continue;
             }
 
-            let (k, v, _) = self.cdb.get_data(ptr);
+            let (k, v, _) = self.cdb.get_data(ptr as usize);
             if k == self.key {
                 return Some(v);
             }
@@ -111,8 +110,8 @@ impl<'c> CDBReader<'c> {
         let mut tables: [PosLen; ENTRIES] = [PosLen{pos: 0,  len: 0}; ENTRIES];
 
         for x in 0..ENTRIES {
-            tables[x] = PosLen{pos: read_cdb_usize(&data[x*PAIR_SIZE..]),
-                               len: read_cdb_usize(&data[x*PAIR_SIZE+INT_SIZE..])};
+            let (pos, len) = read_cdb_usize(&data[x*PAIR_SIZE..]);
+            tables[x] = PosLen{pos, len};
             if !tables[x].valid(data.len()) {
                 return Err("Invalid CDB file.");
             }
@@ -123,8 +122,7 @@ impl<'c> CDBReader<'c> {
 
     fn get_data(&self, pos: usize) -> (&[u8], &[u8], usize)
     {
-        let klen = read_cdb_usize(&self.data[pos..]);
-        let vlen = read_cdb_usize(&self.data[pos + INT_SIZE..]);
+        let (klen, vlen) = read_cdb_usize(&self.data[pos..]);
 
         let keystart = pos + PAIR_SIZE;
         let keyend = keystart + klen;

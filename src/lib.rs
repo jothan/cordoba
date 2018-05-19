@@ -1,3 +1,9 @@
+extern crate byteorder;
+
+use std::io::Cursor;
+
+use byteorder::{LE, ReadBytesExt};
+
 mod read;
 mod write;
 
@@ -64,15 +70,15 @@ impl<'a> From<&'a CDBHash> for u32
     }
 }
 
-fn read_cdb_int(d: &[u8]) -> u32
+fn read_cdb_pair(d: &[u8]) -> (u32, u32)
 {
-    u32::from_le(u32::from(d[0]) |
-                 u32::from(d[1]) << 8 |
-                 u32::from(d[2]) << 16 |
-                 u32::from(d[3]) << 24)
+    let mut rdr = Cursor::new(d);
+
+    (rdr.read_u32::<LE>().unwrap(), rdr.read_u32::<LE>().unwrap())
 }
 
-fn read_cdb_usize(d: &[u8]) -> usize
+fn read_cdb_usize(d: &[u8]) -> (usize, usize)
 {
-    read_cdb_int(d) as usize
+    let r = read_cdb_pair(d);
+    (r.0 as usize, r.1 as usize)
 }
