@@ -1,8 +1,8 @@
 use std::io::{Write, Seek, SeekFrom};
 
-use super::*;
+use byteorder::WriteBytesExt;
 
-//trait WriteFile : Write + Seek;
+use super::*;
 
 #[derive(Debug)]
 struct HashPos(CDBHash, u32);
@@ -14,22 +14,6 @@ pub struct CDBWriter<'c, T: 'c> {
     pos: u64,
     tables: Vec<Vec<HashPos>>,
     header: [PosLen; ENTRIES],
-}
-
-fn usize_to_bytes(sz: usize) -> [u8; 4]
-{
-    let mut sz = u32::to_le(sz as u32);
-    let mut v : [u8; 4] = [0; 4];
-
-    v[0] = sz as u8;
-    sz >>= 8;
-    v[1] = sz as u8;
-    sz >>= 8;
-    v[2] = sz as u8;
-    sz >>= 8;
-    v[3] = sz as u8;
-
-    v
 }
 
 impl<'c, T: Write + Seek> CDBWriter<'c, T>
@@ -48,8 +32,8 @@ impl<'c, T: Write + Seek> CDBWriter<'c, T>
 
     fn write_kv(&mut self, k: &[u8], v: &[u8]) -> Result<(), std::io::Error>
     {
-        self.file.write_all(&usize_to_bytes(k.len())[..])?;
-        self.file.write_all(&usize_to_bytes(v.len())[..])?;
+        self.file.write_u32::<LE>(k.len() as u32)?;
+        self.file.write_u32::<LE>(v.len() as u32)?;
         self.file.write_all(k)?;
         self.file.write_all(v)?;
 
@@ -75,8 +59,8 @@ impl<'c, T: Write + Seek> CDBWriter<'c, T>
         self.file.seek(SeekFrom::Start(0))?;
 
         for header in self.header.iter() {
-            self.file.write_all(&usize_to_bytes(header.pos as usize)[..])?;
-            self.file.write_all(&usize_to_bytes(header.len as usize)[..])?;
+            self.file.write_u32::<LE>(header.pos as u32)?;
+            self.file.write_u32::<LE>(header.len as u32)?;
         }
 
         Ok(())
@@ -104,8 +88,8 @@ impl<'c, T: Write + Seek> CDBWriter<'c, T>
             }
             self.header[i] = PosLen{pos: self.pos as usize, len: tout.len()};
             for row in &tout {
-                self.file.write_all(&usize_to_bytes(row[0] as usize)[..])?;
-                self.file.write_all(&usize_to_bytes(row[1] as usize)[..])?;
+                self.file.write_u32::<LE>(row[0] as u32)?;
+                self.file.write_u32::<LE>(row[1] as u32)?;
             }
             self.pos += (PAIR_SIZE * tout.len()) as u64;
         }
