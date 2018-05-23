@@ -68,7 +68,7 @@ impl<T> CDBWriter<T> where T: Write + Seek
     }
 
     fn finish_generic<F>(mut self, fill: F) -> Result<(), std::io::Error>
-        where F: Fn(&Vec<HashPos>, &mut Vec<(u32, u32)>)
+        where F: Fn(&[HashPos], &mut Vec<(u32, u32)>)
     {
         let mut tout = Vec::new();
 
@@ -104,7 +104,7 @@ impl<T> CDBWriter<T> where T: Write + Seek
     }
 }
 
-fn fill_table_naive(input: &Vec<HashPos>, output: &mut Vec<(u32, u32)>) {
+fn fill_table_naive(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     let tlen = input.len() * FILLFACTOR;
     output.resize(tlen, (0, 0));
     for x in output.iter_mut() { *x = (0, 0); }
@@ -121,7 +121,7 @@ fn fill_table_naive(input: &Vec<HashPos>, output: &mut Vec<(u32, u32)>) {
     }
 }
 
-fn fill_table_btree(input: &Vec<HashPos>, output: &mut Vec<(u32, u32)>) {
+fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     let mut cache = BTreeSet::new();
     let tlen = input.len() * FILLFACTOR;
     output.resize(tlen, (0, 0));
