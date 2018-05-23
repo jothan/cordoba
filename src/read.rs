@@ -8,24 +8,18 @@ use byteorder::{LE, ReadBytesExt};
 use super::*;
 
 pub trait CDBAccess {
-    fn read_pair_u32(&self, pos: u64) -> io::Result<(u32, u32)>;
-
     fn read_pair(&self, pos: u64) -> io::Result<(usize, usize)> {
-        let r = self.read_pair_u32(pos)?;
-        Ok((r.0 as usize, r.1 as usize))
+        let data = self.get_data(pos, PAIR_SIZE)?;
+        let mut cur = Cursor::new(data);
+
+        Ok((cur.read_u32::<LE>()? as usize, cur.read_u32::<LE>()? as usize))
     }
 
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>>;
-
     fn len(&self) -> u64;
 }
 
 impl <'c> CDBAccess for &'c[u8] {
-    fn read_pair_u32(&self, pos: u64) -> io::Result<(u32, u32)> {
-        let mut rdr = Cursor::new(&self[pos as usize..]);
-        Ok((rdr.read_u32::<LE>()?, rdr.read_u32::<LE>()?))
-    }
-
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
         let pos = pos as usize;
         Ok(Cow::from(&self[pos..pos+len]))
@@ -72,15 +66,6 @@ impl <T: Read + Seek> CDBFileAccess<T> {
 }
 
 impl <T: Read + Seek> CDBAccess for CDBFileAccess<T> {
-    fn read_pair_u32(&self, pos: u64) -> io::Result<(u32, u32)> {
-        let mut file = self.0.borrow_mut();
-        let mut buf : [u8; PAIR_SIZE] = [0; PAIR_SIZE];
-        file.read(pos, &mut buf)?;
-
-        let mut cur = Cursor::new(&buf);
-        Ok((cur.read_u32::<LE>()?, cur.read_u32::<LE>()?))
-    }
-
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
         let mut out = Vec::with_capacity(len);
         out.resize(len, 0);
