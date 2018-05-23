@@ -1,11 +1,11 @@
-extern crate cdb;
+extern crate cordoba;
 extern crate memmap;
 
 use std::env;
 use std::fs::File;
 use std::str;
 
-use cdb::CDBReader;
+use cordoba::CDBReader;
 
 use memmap::Mmap;
 use memmap::MmapOptions;

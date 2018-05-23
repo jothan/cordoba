@@ -1,10 +1,10 @@
-extern crate cdb;
+extern crate cordoba;
 extern crate memmap;
 
 use std::fs::File;
 use std::io::BufWriter;
 
-use cdb::CDBWriter;
+use cordoba::CDBWriter;
 
 fn main()
 {
