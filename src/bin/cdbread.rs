@@ -26,17 +26,17 @@ fn main()
 
     if args.len() <= 2 {
         for (k, v) in &cdb {
-            println!("{}: {}", str::from_utf8(k).unwrap(), str::from_utf8(v).unwrap());
+            println!("{}: {}", str::from_utf8(&k).unwrap(), str::from_utf8(&v).unwrap());
         }
     } else {
         for k in &args[2..] {
             let ks = k.as_bytes();
             for v in cdb.lookup(ks) {
-                println!("v: {}", str::from_utf8(v).unwrap());
+                println!("v: {}", str::from_utf8(&v).unwrap());
             }
 
             match cdb.get(ks) {
-                Some(v) => println!("{} = {}", k, str::from_utf8(v).unwrap()),
+                Some(v) => println!("{} = {}", k, str::from_utf8(&v).unwrap()),
                 None => println!("{} not found", k),
             }
         }
