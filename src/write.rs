@@ -1,6 +1,6 @@
 use std::io::{Write, Seek, SeekFrom};
 
-use byteorder::WriteBytesExt;
+use byteorder::{LE, WriteBytesExt};
 
 use super::*;
 

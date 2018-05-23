@@ -1,13 +1,10 @@
 extern crate byteorder;
 
-use std::io::Cursor;
-
-use byteorder::{LE, ReadBytesExt};
 
 mod read;
 mod write;
 
-pub use self::read::{CDBReader, FileIter, LookupIter};
+pub use self::read::{CDBReader};
 pub use self::write::{CDBWriter};
 
 const ENTRIES: usize = 256;
@@ -20,9 +17,9 @@ struct PosLen {
 }
 
 impl PosLen {
-    fn valid(&self, datalen : usize) -> bool
+    fn valid(&self, datalen : u64) -> bool
     {
-        self.pos + self.len <= datalen
+        (self.pos + self.len) as u64 <= datalen
     }
 }
 
@@ -59,17 +56,4 @@ impl<'a> From<&'a CDBHash> for u32
     {
         h.0
     }
-}
-
-fn read_cdb_pair(d: &[u8]) -> (u32, u32)
-{
-    let mut rdr = Cursor::new(d);
-
-    (rdr.read_u32::<LE>().unwrap(), rdr.read_u32::<LE>().unwrap())
-}
-
-fn read_cdb_usize(d: &[u8]) -> (usize, usize)
-{
-    let r = read_cdb_pair(d);
-    (r.0 as usize, r.1 as usize)
 }

@@ -22,7 +22,7 @@ fn main()
     let fname = args.get(1).expect("First argument must be a CDB file.");
     let mmap = open(fname);
 
-    let cdb = CDBReader::new(&mmap).unwrap();
+    let cdb = CDBReader::new(&mmap[..]).unwrap();
 
     if args.len() <= 2 {
         for (k, v) in &cdb {
