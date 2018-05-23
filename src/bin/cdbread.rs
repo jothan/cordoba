@@ -25,7 +25,8 @@ fn main()
     let cdb = CDBReader::new(&mmap[..]).unwrap();
 
     if args.len() <= 2 {
-        for (k, v) in &cdb {
+        let mut iter = (&cdb).into_iter();
+        while let Some(Ok((k, v))) = iter.next() {
             println!("{}: {}", str::from_utf8(&k).unwrap(), str::from_utf8(&v).unwrap());
         }
     } else {

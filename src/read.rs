@@ -99,14 +99,18 @@ pub struct LookupIter<'c, 'k, T: 'c> {
 }
 
 impl<'c, T: CDBAccess> Iterator for FileIter<'c, T> {
-    type Item = (Cow<'c, [u8]>, Cow<'c, [u8]>);
+    type Item = io::Result<(Cow<'c, [u8]>, Cow<'c, [u8]>)>;
 
     fn next(&mut self) -> Option<Self::Item>
     {
         if self.pos < self.cdb.tables[0].pos {
-            let (k, v, newpos) = self.cdb.get_data(self.pos).unwrap();
-            self.pos = newpos;
-            Some((k, v))
+            match self.cdb.get_data(self.pos) {
+                Ok((k, v, newpos)) => {
+                    self.pos = newpos;
+                    Some(Ok((k, v)))
+                }
+                Err(e) => { self.pos = self.cdb.tables[0].pos; return Some(Err(e)) }
+            }
         } else {
             None
         }
