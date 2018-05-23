@@ -130,7 +130,7 @@ impl<'c, 'k, T: CDBAccess> LookupIter<'c, 'k, T> {
 }
 
 impl<'c, 'k, T: CDBAccess> Iterator for LookupIter<'c, 'k, T> {
-    type Item = Cow<'c, [u8]>;
+    type Item = io::Result<Cow<'c, [u8]>>;
 
     fn next(&mut self) -> Option<Self::Item>
     {
@@ -153,7 +153,10 @@ impl<'c, 'k, T: CDBAccess> Iterator for LookupIter<'c, 'k, T> {
             }
             self.nlookups += 1;
 
-            let (hash, ptr) = self.cdb.access.read_pair(pos as u64).unwrap();
+            let (hash, ptr) = match self.cdb.access.read_pair(pos as u64) {
+                Ok(v) => v,
+                Err(e) => { self.done = true; return Some(Err(e)) }
+            };
             if ptr == 0 {
                 self.done = true;
                 return None;
@@ -163,9 +166,12 @@ impl<'c, 'k, T: CDBAccess> Iterator for LookupIter<'c, 'k, T> {
                 continue;
             }
 
-            let (k, v, _) = self.cdb.get_data(ptr as usize).unwrap();
+            let (k, v, _) = match self.cdb.get_data(ptr as usize) {
+                Ok(v) => v,
+                Err(e) => { self.done = true; return Some(Err(e)) }
+            };
             if k == self.key {
-                return Some(v);
+                return Some(Ok(v));
             }
         }
     }
@@ -223,7 +229,7 @@ impl<A: CDBAccess> CDBReader<A> {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> Option<Cow<'c, [u8]>>
+    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> Option<io::Result<Cow<'c, [u8]>>>
     {
         self.lookup(key).nth(0)
     }

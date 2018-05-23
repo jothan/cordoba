@@ -32,11 +32,12 @@ fn main()
         for k in &args[2..] {
             let ks = k.as_bytes();
             for v in cdb.lookup(ks) {
-                println!("v: {}", str::from_utf8(&v).unwrap());
+                println!("v: {}", str::from_utf8(&v.unwrap()).unwrap());
             }
 
             match cdb.get(ks) {
-                Some(v) => println!("{} = {}", k, str::from_utf8(&v).unwrap()),
+                Some(Ok(v)) => println!("{} = {}", k, str::from_utf8(&v).unwrap()),
+                Some(Err(e)) => println!("error: {:?}", e),
                 None => println!("{} not found", k),
             }
         }
