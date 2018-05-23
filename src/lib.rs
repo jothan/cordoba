@@ -1,10 +1,9 @@
 extern crate byteorder;
 
-
 mod read;
 mod write;
 
-pub use self::read::{CDBReader};
+pub use self::read::*;
 pub use self::write::{CDBWriter};
 
 const ENTRIES: usize = 256;

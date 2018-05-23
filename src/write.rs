@@ -67,11 +67,13 @@ impl<T> CDBWriter<T> where T: Write + Seek
         Ok(())
     }
 
-    fn finish_generic<F: Fn(&Vec<HashPos>, &mut Vec<(u32, u32)>)>(mut self, filler: F) -> Result<(), std::io::Error> {
+    fn finish_generic<F>(mut self, fill: F) -> Result<(), std::io::Error>
+        where F: Fn(&Vec<HashPos>, &mut Vec<(u32, u32)>)
+    {
         let mut tout = Vec::new();
 
         for (i, table) in self.tables.iter().enumerate() {
-            filler(&table, &mut tout);
+            fill(&table, &mut tout);
             self.header[i] = PosLen{pos: self.pos as usize, len: tout.len()};
             for row in &tout {
                 self.file.write_u32::<LE>(row.0 as u32)?;
