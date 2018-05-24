@@ -7,5 +7,16 @@ authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
 panic = "abort"
 
 [dependencies]
-memmap = "0.6.1"
 byteorder = "1"
+memmap = { version="0.6.2", optional=true }
+
+[features]
+build-binary = ["memmap"]
+
+[[bin]]
+name = "cdbread"
+required-features = ["build-binary"]
+
+[[bin]]
+name = "cdbwrite"
+required-features = ["build-binary"]
