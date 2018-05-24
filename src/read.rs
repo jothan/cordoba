@@ -89,13 +89,13 @@ pub struct CDBReader<T> {
     tables: [PosLen; ENTRIES],
 }
 
-pub struct FileIter<'c, T: 'c> {
-    pub cdb: &'c CDBReader<T>,
+pub struct FileIter<'c, A: 'c> {
+    pub cdb: &'c CDBReader<A>,
     pos: usize,
 }
 
-pub struct LookupIter<'c, 'k, T: 'c> {
-    pub cdb: &'c CDBReader<T>,
+pub struct LookupIter<'c, 'k, A: 'c> {
+    pub cdb: &'c CDBReader<A>,
     table: &'c PosLen,
     key: &'k [u8],
     khash: CDBHash,
@@ -187,10 +187,10 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
     }
 }
 
-impl<'c, T: CDBAccess> IntoIterator for &'c CDBReader<T>
+impl<'c, A: CDBAccess> IntoIterator for &'c CDBReader<A>
 {
-    type IntoIter = FileIter<'c, T>;
-    type Item = <FileIter<'c, T> as Iterator>::Item;
+    type IntoIter = FileIter<'c, A>;
+    type Item = <FileIter<'c, A> as Iterator>::Item;
 
     fn into_iter(self) -> Self::IntoIter
     {
