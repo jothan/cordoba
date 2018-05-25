@@ -239,7 +239,7 @@ impl<A: CDBAccess> CDBReader<A> {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> Option<io::Result<A::Output>>
+    pub fn get(&self, key: &[u8]) -> Option<io::Result<A::Output>>
     {
         self.lookup(key).nth(0)
     }
