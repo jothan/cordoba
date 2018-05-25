@@ -110,11 +110,11 @@ fn fill_table_naive(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     output.resize(tlen, (0, 0));
 
     for hp in input {
-        let startpos = hp.0.slot(tlen);
-        for try in 0..tlen {
-            let idx = (startpos + try) % tlen;
-            if output[idx].1 == 0 {
-                output[idx] = (u32::from(&hp.0), hp.1);
+        let (left, right) = output.split_at_mut(hp.0.slot(tlen));
+
+        for slot in right.iter_mut().chain(left.iter_mut()) {
+            if slot.1 == 0 {
+                *slot = (u32::from(&hp.0), hp.1);
                 break;
             }
         }
