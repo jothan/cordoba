@@ -1,7 +1,15 @@
 [package]
 name = "cordoba"
+description = "Zero-copy and mmapable CDB access library with a Python interface"
 version = "0.1.0"
 authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
+
+homepage = "https://github.com/jothan/cordoba"
+repository = "https://github.com/jothan/cordoba.git"
+license = "GPL-3.0+"
+readme = "README.md"
+keywords = ["cdb", "python"]
+categories = ["database", "data-structures", "config", "filesystem"]
 
 [profile.release]
 panic = "abort"
