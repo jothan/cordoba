@@ -106,8 +106,8 @@ impl<T> CDBWriter<T> where T: Write + Seek
 
 fn fill_table_naive(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     let tlen = input.len() * FILLFACTOR;
+    output.clear();
     output.resize(tlen, (0, 0));
-    for x in output.iter_mut() { *x = (0, 0); }
 
     for hp in input {
         let startpos = hp.0.slot(tlen);
@@ -124,8 +124,8 @@ fn fill_table_naive(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
 fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     let mut cache = BTreeSet::new();
     let tlen = input.len() * FILLFACTOR;
+    output.clear();
     output.resize(tlen, (0, 0));
-    for x in output.iter_mut() { *x = (0, 0); }
 
     for i in 0..tlen { cache.insert(i); }
 
