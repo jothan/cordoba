@@ -84,8 +84,8 @@ impl <T: Read + Seek> CDBAccess for CDBFileAccess<T> {
     }
 }
 
-pub struct CDBReader<T> {
-    pub access: T,
+pub struct CDBReader<A> {
+    pub access: A,
     tables: [PosLen; ENTRIES],
 }
 

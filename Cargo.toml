@@ -8,13 +8,15 @@ panic = "abort"
 
 [dependencies]
 byteorder = "1"
+clap = { version="2.31", optional=true }
 memmap = { version="0.6.2", optional=true }
 
 [features]
-build-binary = ["memmap"]
+default = ["build-binary"]
+build-binary = ["clap", "memmap"]
 
 [[bin]]
-name = "cdbread"
+name = "cdb"
 required-features = ["build-binary"]
 
 [[bin]]
