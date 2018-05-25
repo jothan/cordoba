@@ -2,6 +2,8 @@ use std::cell::RefCell;
 use std::io;
 use std::io::{Cursor, SeekFrom};
 use std::io::prelude::*;
+use std::iter::Chain;
+use std::ops::Range;
 
 use byteorder::{LE, ReadBytesExt};
 use super::*;
@@ -96,11 +98,10 @@ pub struct FileIter<'c, A: 'c> {
 
 pub struct LookupIter<'c, 'k, A: 'c> {
     pub cdb: &'c CDBReader<A>,
-    table: &'c PosLen,
+    table_pos: usize,
     key: &'k [u8],
     khash: CDBHash,
-    start_pos: usize,
-    nlookups: usize,
+    iter: Chain<Range<usize>, Range<usize>>,
     done: bool,
 }
 
@@ -134,8 +135,9 @@ impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A> {
         } else {
             0
         };
+        let iter = (start_pos..(table.len)).chain(0..start_pos);
 
-        LookupIter{cdb, table, key, khash, start_pos, nlookups: 0, done: false}
+        LookupIter{cdb, key, khash, iter, table_pos: table.pos, done: false}
     }
 }
 
@@ -148,22 +150,10 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
             return None;
         }
 
-        if self.table.len == 0 {
-            self.done = true;
-            return None;
-        }
+        while let Some(tableidx) = self.iter.next() {
+            let pos = (self.table_pos + tableidx*PAIR_SIZE) as u64;
 
-        loop {
-            let tableidx = (self.start_pos + self.nlookups) % self.table.len;
-            let pos = self.table.pos + tableidx*PAIR_SIZE;
-
-            if tableidx == self.start_pos && self.nlookups != 0 {
-                self.done = true;
-                return None;
-            }
-            self.nlookups += 1;
-
-            let (hash, ptr) = match self.cdb.access.read_pair(pos as u64) {
+            let (hash, ptr) = match self.cdb.access.read_pair(pos) {
                 Ok(v) => v,
                 Err(e) => { self.done = true; return Some(Err(e)) }
             };
@@ -184,6 +174,8 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
                 return Some(Ok(v));
             }
         }
+        self.done = true;
+        None
     }
 }
 
