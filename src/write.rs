@@ -127,7 +127,7 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
     output.clear();
     output.resize(tlen, (0, 0));
 
-    for i in 0..tlen { cache.insert(i); }
+    cache.extend(0..tlen);
 
     for hp in input {
         let startpos = hp.0.slot(tlen);
