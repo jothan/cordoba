@@ -4,7 +4,7 @@ mod read;
 mod write;
 
 pub use self::read::*;
-pub use self::write::{CDBWriter};
+pub use self::write::CDBWriter;
 
 const ENTRIES: usize = 256;
 const PAIR_SIZE: usize = 8;
@@ -16,29 +16,26 @@ struct PosLen {
 }
 
 impl PosLen {
-    fn valid(&self, datalen : u64) -> bool
-    {
+    fn valid(&self, datalen: u64) -> bool {
         (self.pos + self.len) as u64 <= datalen
     }
 }
 
 struct CDBHash(u32);
 
-impl CDBHash
-{
-    fn new(d: &[u8]) -> Self
-    {
-        let h = d.iter().fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
+impl CDBHash {
+    fn new(d: &[u8]) -> Self {
+        let h = d
+            .iter()
+            .fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
         CDBHash(h)
     }
 
-    fn table(&self) -> usize
-    {
+    fn table(&self) -> usize {
         self.0 as usize % ENTRIES
     }
 
-    fn slot(&self, tlen: usize) -> usize
-    {
+    fn slot(&self, tlen: usize) -> usize {
         (self.0 as usize >> 8) % tlen
     }
 }
@@ -49,10 +46,8 @@ impl std::fmt::Debug for CDBHash {
     }
 }
 
-impl<'a> From<&'a CDBHash> for u32
-{
-    fn from(h : &'a CDBHash) -> Self
-    {
+impl<'a> From<&'a CDBHash> for u32 {
+    fn from(h: &'a CDBHash) -> Self {
         h.0
     }
 }

@@ -6,12 +6,14 @@ extern crate cordoba;
 extern crate clap;
 extern crate memmap;
 
-use cordoba::{CDBReader, CDBFileAccess};
+use cordoba::{CDBFileAccess, CDBReader};
 
-use clap::{Arg, App, SubCommand, ArgMatches};
+use clap::{App, Arg, ArgMatches, SubCommand};
 
-fn open_reader(fname: &str, access_type: Option<&str>) -> std::io::Result<CDBReader<CDBFileAccess<File>>>
-{
+fn open_reader(
+    fname: &str,
+    access_type: Option<&str>,
+) -> std::io::Result<CDBReader<CDBFileAccess<File>>> {
     // FIXME: Make this generic.
     let file = File::open(fname)?;
 
@@ -21,7 +23,10 @@ fn open_reader(fname: &str, access_type: Option<&str>) -> std::io::Result<CDBRea
 }
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
-    let reader = open_reader(matches.value_of("cdbfile").unwrap(), matches.value_of("access"))?;
+    let reader = open_reader(
+        matches.value_of("cdbfile").unwrap(),
+        matches.value_of("access"),
+    )?;
     let key = matches.value_of("key").unwrap().as_bytes();
     let recno = matches.value_of("recno");
 
@@ -31,7 +36,7 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
             std::io::stdout().write_all(&value?)?;
             std::io::stdout().write_all(b"\n")?;
         }
-        return Ok(())
+        return Ok(());
     }
 
     for v in reader.lookup(key) {
@@ -46,19 +51,21 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
 fn main() -> std::io::Result<()> {
     let newline_arg = Arg::with_name("newline").short("m");
     let access_arg = Arg::with_name("access")
-        .long("access").takes_value(true)
+        .long("access")
+        .takes_value(true)
         .possible_value("mmap")
         .possible_value("reader")
         .possible_value("bufreader");
 
     let matches = App::new("cdb")
-        .subcommand(SubCommand::with_name("-q")
-                    .about("query")
-                    .arg(newline_arg)
-                    .arg(access_arg)
-                    .arg(Arg::with_name("recno").short("n").takes_value(true))
-                    .arg(Arg::with_name("cdbfile").index(1).required(true))
-                    .arg(Arg::with_name("key").index(2).required(true))
+        .subcommand(
+            SubCommand::with_name("-q")
+                .about("query")
+                .arg(newline_arg)
+                .arg(access_arg)
+                .arg(Arg::with_name("recno").short("n").takes_value(true))
+                .arg(Arg::with_name("cdbfile").index(1).required(true))
+                .arg(Arg::with_name("key").index(2).required(true)),
         )
         .get_matches();
 
