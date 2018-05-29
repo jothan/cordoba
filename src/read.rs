@@ -303,8 +303,11 @@ impl<A: CDBAccess> CDBLookup for CDBReader<A> {
     }
 }
 
-impl<B: Read + Seek> CDBReader<CDBFileAccess<B>> {
-    pub fn from_file(file: B) -> io::Result<Self> {
+impl<F> CDBReader<CDBFileAccess<F>>
+where
+    F: Read + Seek,
+{
+    pub fn from_file(file: F) -> io::Result<Self> {
         CDBReader::new(CDBFileAccess::new(file)?)
     }
 }
