@@ -6,35 +6,58 @@ extern crate cordoba;
 extern crate clap;
 extern crate memmap;
 
+use cordoba::{CDBLookup, CDBReader};
 use memmap::Mmap;
-use cordoba::{CDBReader, CDBLookup};
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 
+struct Reader {
+    file: File,
+    map: Option<Mmap>,
+    access: AccessType,
+}
 
-/*    fn get_lookup<'c>(&'c self, access_type: Option<&str>) -> std::io::Result<Box<CDBLookup<'c, '_> + 'c>> {
-        println!("at: {:?}", access_type);
+enum AccessType {
+    Mmap,
+    Reader,
+    BufReader,
+}
+
+impl<'a> From<&'a str> for AccessType {
+    fn from(s: &str) -> Self {
+        match s {
+            "reader" => AccessType::Reader,
+            "bufreader" => AccessType::BufReader,
+            _ => AccessType::Mmap,
+        }
     }
-}*/
+}
 
-/*fn open_reader (
-    fname: &str,
-) -> std::io::Result<Reader>
-{
-    // FIXME: Make this generic.
+impl Reader {
+    pub fn new(fname: &str, access: AccessType) -> std::io::Result<Self> {
+        let file = File::open(fname)?;
+        let map = match access {
+            AccessType::Mmap => Some(unsafe { Mmap::map(&file)? }),
+            _ => None,
+        };
 
-    Ok(Reader{file, map})
-}*/
+        Ok(Reader { file, map, access })
+    }
+
+    fn to_lookup<'a>(&'a self) -> std::io::Result<Box<CDBLookup + 'a>> {
+        Ok(match self.access {
+            AccessType::Mmap => Box::new(CDBReader::new(&self.map.as_ref().unwrap()[..])?),
+            AccessType::Reader => Box::new(CDBReader::from_file(&self.file)?),
+            AccessType::BufReader => Box::new(CDBReader::from_file(BufReader::new(&self.file))?),
+        })
+    }
+}
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
-    let file = File::open(matches.value_of("cdbfile").unwrap())?;
-    let map = unsafe { Mmap::map(&file)? };
-
-    let reader: Box<CDBLookup> = match matches.value_of("access") {
-        Some("bufreader") => Box::new(CDBReader::from_file(BufReader::new(&file))?),
-        Some("reader") => Box::new(CDBReader::from_file(&file)?),
-        _ => Box::new(CDBReader::new(&map[..])?),
-    };
+    let access_desc = matches.value_of("access").unwrap_or("mmap");
+    let access: AccessType = access_desc.into();
+    let r = Reader::new(matches.value_of("cdbfile").unwrap(), access)?;
+    let reader = r.to_lookup()?;
 
     let key = matches.value_of("key").unwrap().as_bytes();
     let recno = matches.value_of("recno");
