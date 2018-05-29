@@ -10,6 +10,8 @@ optimization beyond removing redundant seeks. If BufReader is used, a
 rather small buffer size is recommended as hash table reads are done
 on every value access.
 
+[API Documentation](https://docs.rs/cordoba/)
+
 Planned features
 ----------------
 
