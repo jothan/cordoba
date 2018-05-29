@@ -132,7 +132,7 @@ pub struct FileIter<'c, A: 'c> {
     pos: usize,
 }
 
-pub struct LookupIter<'c, 'k, A: 'c> {
+struct LookupIter<'c, 'k, A: 'c> {
     pub cdb: &'c CDBReader<A>,
     table_pos: usize,
     key: &'k [u8],
@@ -266,7 +266,7 @@ impl<A: CDBAccess> CDBReader<A> {
         }
     }
 
-    pub fn lookup<'c, 'k>(&'c self, key: &'k [u8]) -> LookupIter<'c, 'k, A> {
+    pub fn lookup<'c>(&'c self, key: &'c [u8]) -> impl Iterator<Item = io::Result<A::Output>> + 'c {
         LookupIter::new(self, key)
     }
 
