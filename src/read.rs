@@ -25,6 +25,7 @@ where
 
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Self::Output>;
     fn len(&self) -> u64;
+    fn to_vec(Self::Output) -> Vec<u8>;
 }
 
 impl<'c> CDBAccess for &'c [u8] {
@@ -37,6 +38,10 @@ impl<'c> CDBAccess for &'c [u8] {
 
     fn len(&self) -> u64 {
         (*self).len() as u64
+    }
+
+    fn to_vec(out: Self::Output) -> Vec<u8> {
+        out.to_vec()
     }
 }
 
@@ -92,6 +97,10 @@ impl<T: Read + Seek> CDBAccess for CDBFileAccess<T> {
 
     fn len(&self) -> u64 {
         self.0.borrow().size
+    }
+
+    fn to_vec(out: Self::Output) -> Vec<u8> {
+        out
     }
 }
 
@@ -259,7 +268,8 @@ impl<A: CDBAccess> CDBReader<A> {
 
 pub trait CDBLookup
 {
-    // FIXME: return proper values instead of copying twice.
+    // FIXME: fight the borrow checker to return references or owned
+    // types depending on the access type
     fn iter<'c>(&'c self) -> Box<Iterator<Item=io::Result<(Vec<u8>, Vec<u8>)>> + 'c>;
     fn lookup<'c: 'k, 'k>(&'c self, key: &'k [u8]) -> Box<Iterator<Item=io::Result<Vec<u8>>> + 'k>;
     fn get(&self, key: &[u8]) -> Option<io::Result<Vec<u8>>>;
@@ -268,15 +278,15 @@ pub trait CDBLookup
 impl <A: CDBAccess> CDBLookup for CDBReader<A>
 {
     fn iter<'c>(&'c self) -> Box<Iterator<Item=io::Result<(Vec<u8>, Vec<u8>)>> + 'c> {
-        Box::new(CDBReader::iter(self).map(|res| res.map(|(k, v)| (k.as_ref().to_vec(), v.as_ref().to_vec()))))
+        Box::new(CDBReader::iter(self).map(|res| res.map(|(k, v)| (A::to_vec(k), A::to_vec(v)))))
     }
 
     fn lookup<'c: 'k, 'k>(&'c self, key: &'k [u8]) -> Box<Iterator<Item=io::Result<Vec<u8>>> + 'k> {
-        Box::new(CDBReader::lookup(self, key).map(|res| res.map(|x| x.as_ref().to_vec())))
+        Box::new(CDBReader::lookup(self, key).map(|res| res.map(A::to_vec)))
     }
 
     fn get(&self, key: &[u8]) -> Option<io::Result<Vec<u8>>> {
-        CDBReader::get(self, key).map(|res| res.map(|x| x.as_ref().to_vec()))
+        CDBReader::get(self, key).map(|res| res.map(A::to_vec))
     }
 }
 
