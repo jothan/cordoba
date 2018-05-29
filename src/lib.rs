@@ -10,7 +10,7 @@ const ENTRIES: usize = 256;
 const PAIR_SIZE: usize = 8;
 
 #[derive(Copy, Clone)]
-struct PosLen {
+pub struct PosLen {
     pos: usize,
     len: usize,
 }

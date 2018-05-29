@@ -23,6 +23,21 @@ where
         ))
     }
 
+    fn read_header(&self) -> io::Result<[PosLen; ENTRIES]> {
+        let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
+        let mut cur = Cursor::new(self.get_data(0, PAIR_SIZE * ENTRIES)?);
+
+        for table in tables.iter_mut() {
+            let (pos, len) = (cur.read_u32::<LE>()? as usize, cur.read_u32::<LE>()? as usize);
+
+            *table = PosLen { pos, len };
+            if !table.valid(self.len()) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, ""));
+            }
+        }
+        Ok(tables)
+    }
+
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Self::Output>;
     fn len(&self) -> u64;
     fn to_vec(Self::Output) -> Vec<u8>;
@@ -223,16 +238,7 @@ type KeyValueNext<O> = (O, O, usize);
 
 impl<A: CDBAccess> CDBReader<A> {
     pub fn new(access: A) -> io::Result<CDBReader<A>> {
-        let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
-
-        for (x, table) in tables.iter_mut().enumerate() {
-            let (pos, len) = access.read_pair(x as u64 * PAIR_SIZE as u64)?;
-            *table = PosLen { pos, len };
-            if !table.valid(access.len()) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, ""));
-            }
-        }
-
+        let tables = access.read_header()?;
         Ok(CDBReader { access, tables })
     }
 
