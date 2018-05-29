@@ -145,7 +145,7 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
             .unwrap();
         cache.take(&idx);
 
-        debug_assert!(output[idx].1 == 0);
+        debug_assert_eq!(output[idx].1, 0);
         output[idx] = (u32::from(&hp.0), hp.1);
     }
 }
