@@ -1,32 +1,41 @@
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufReader, Write};
 
 extern crate cordoba;
 
 extern crate clap;
 extern crate memmap;
 
-use cordoba::{CDBFileAccess, CDBReader};
+use memmap::Mmap;
+use cordoba::{CDBReader, CDBLookup};
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 
-fn open_reader(
-    fname: &str,
-    access_type: Option<&str>,
-) -> std::io::Result<CDBReader<CDBFileAccess<File>>> {
-    // FIXME: Make this generic.
-    let file = File::open(fname)?;
 
-    Ok(match access_type {
-        _ => CDBReader::from_file(file)?,
-    })
-}
+/*    fn get_lookup<'c>(&'c self, access_type: Option<&str>) -> std::io::Result<Box<CDBLookup<'c, '_> + 'c>> {
+        println!("at: {:?}", access_type);
+    }
+}*/
+
+/*fn open_reader (
+    fname: &str,
+) -> std::io::Result<Reader>
+{
+    // FIXME: Make this generic.
+
+    Ok(Reader{file, map})
+}*/
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
-    let reader = open_reader(
-        matches.value_of("cdbfile").unwrap(),
-        matches.value_of("access"),
-    )?;
+    let file = File::open(matches.value_of("cdbfile").unwrap())?;
+    let map = unsafe { Mmap::map(&file)? };
+
+    let reader: Box<CDBLookup> = match matches.value_of("access") {
+        Some("bufreader") => Box::new(CDBReader::from_file(BufReader::new(&file))?),
+        Some("reader") => Box::new(CDBReader::from_file(&file)?),
+        _ => Box::new(CDBReader::new(&map[..])?),
+    };
+
     let key = matches.value_of("key").unwrap().as_bytes();
     let recno = matches.value_of("recno");
 

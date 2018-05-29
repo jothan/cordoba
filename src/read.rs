@@ -257,6 +257,29 @@ impl<A: CDBAccess> CDBReader<A> {
     }
 }
 
+pub trait CDBLookup
+{
+    // FIXME: return proper values instead of copying twice.
+    fn iter<'c>(&'c self) -> Box<Iterator<Item=io::Result<(Vec<u8>, Vec<u8>)>> + 'c>;
+    fn lookup<'c: 'k, 'k>(&'c self, key: &'k [u8]) -> Box<Iterator<Item=io::Result<Vec<u8>>> + 'k>;
+    fn get(&self, key: &[u8]) -> Option<io::Result<Vec<u8>>>;
+}
+
+impl <A: CDBAccess> CDBLookup for CDBReader<A>
+{
+    fn iter<'c>(&'c self) -> Box<Iterator<Item=io::Result<(Vec<u8>, Vec<u8>)>> + 'c> {
+        Box::new(CDBReader::iter(self).map(|res| res.map(|(k, v)| (k.as_ref().to_vec(), v.as_ref().to_vec()))))
+    }
+
+    fn lookup<'c: 'k, 'k>(&'c self, key: &'k [u8]) -> Box<Iterator<Item=io::Result<Vec<u8>>> + 'k> {
+        Box::new(CDBReader::lookup(self, key).map(|res| res.map(|x| x.as_ref().to_vec())))
+    }
+
+    fn get(&self, key: &[u8]) -> Option<io::Result<Vec<u8>>> {
+        CDBReader::get(self, key).map(|res| res.map(|x| x.as_ref().to_vec()))
+    }
+}
+
 impl<B: Read + Seek> CDBReader<CDBFileAccess<B>> {
     pub fn from_file(file: B) -> io::Result<Self> {
         CDBReader::new(CDBFileAccess::new(file)?)
