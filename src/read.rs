@@ -123,17 +123,19 @@ impl<T: Read + Seek> CDBAccess for CDBFileAccess<T> {
 }
 
 pub struct CDBReader<A> {
-    pub access: A,
+    access: A,
     tables: [PosLen; ENTRIES],
 }
 
+#[derive(Clone)]
 pub struct FileIter<'c, A: 'c> {
-    pub cdb: &'c CDBReader<A>,
+    cdb: &'c CDBReader<A>,
     pos: usize,
 }
 
+#[derive(Clone)]
 struct LookupIter<'c, 'k, A: 'c> {
-    pub cdb: &'c CDBReader<A>,
+    cdb: &'c CDBReader<A>,
     table_pos: usize,
     key: &'k [u8],
     khash: CDBHash,
@@ -233,7 +235,7 @@ impl<'c, A: CDBAccess> IntoIterator for &'c CDBReader<A> {
     type Item = <FileIter<'c, A> as Iterator>::Item;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.iter()
+        FileIter{cdb: self, pos: ENTRIES * PAIR_SIZE}
     }
 }
 
@@ -259,11 +261,8 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter(&self) -> FileIter<A> {
-        FileIter {
-            cdb: self,
-            pos: ENTRIES * PAIR_SIZE,
-        }
+    pub fn iter<'c>(&'c self) -> impl Iterator<Item = io::Result<(A::Output, A::Output)>> + 'c {
+        self.into_iter()
     }
 
     pub fn lookup<'c>(&'c self, key: &'c [u8]) -> impl Iterator<Item = io::Result<A::Output>> + 'c {

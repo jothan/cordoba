@@ -21,6 +21,7 @@ impl PosLen {
     }
 }
 
+#[derive(Copy, Clone)]
 struct CDBHash(u32);
 
 impl CDBHash {
