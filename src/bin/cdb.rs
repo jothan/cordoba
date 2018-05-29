@@ -53,9 +53,12 @@ impl Reader {
     }
 }
 
+fn access_type(matches: &ArgMatches) -> AccessType {
+    matches.value_of("access").unwrap_or("mmap").into()
+}
+
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
-    let access_desc = matches.value_of("access").unwrap_or("mmap");
-    let access: AccessType = access_desc.into();
+    let access = access_type(matches);
     let r = Reader::new(matches.value_of("cdbfile").unwrap(), access)?;
     let reader = r.to_lookup()?;
 
@@ -80,6 +83,22 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
     Ok(())
 }
 
+fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
+    let access = access_type(matches);
+    let r = Reader::new(matches.value_of("cdbfile").unwrap(), access)?;
+    let reader = r.to_lookup()?;
+
+    for res in reader.iter() {
+        let (k, v) = res?;
+        std::io::stdout().write_all(&k)?;
+        std::io::stdout().write_all(b" = ")?;
+        std::io::stdout().write_all(&v)?;
+        std::io::stdout().write_all(b"\n")?;
+    }
+
+    Ok(())
+}
+
 fn main() -> std::io::Result<()> {
     let newline_arg = Arg::with_name("newline").short("m");
     let access_arg = Arg::with_name("access")
@@ -88,21 +107,32 @@ fn main() -> std::io::Result<()> {
         .possible_value("mmap")
         .possible_value("reader")
         .possible_value("bufreader");
+    let cdbfile_arg = Arg::with_name("cdbfile").index(1).required(true);
 
     let matches = App::new("cdb")
         .subcommand(
             SubCommand::with_name("-q")
                 .about("query")
-                .arg(newline_arg)
-                .arg(access_arg)
+                .arg(newline_arg.clone())
+                .arg(access_arg.clone())
                 .arg(Arg::with_name("recno").short("n").takes_value(true))
-                .arg(Arg::with_name("cdbfile").index(1).required(true))
+                .arg(cdbfile_arg.clone())
                 .arg(Arg::with_name("key").index(2).required(true)),
+        )
+        .subcommand(
+            SubCommand::with_name("-d")
+                .about("dump")
+                .arg(newline_arg.clone())
+                .arg(access_arg.clone())
+                .arg(cdbfile_arg.clone())
         )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("-q") {
         cmd_query(matches)?;
+    } else if let Some(matches) = matches.subcommand_matches("-d") {
+        cmd_dump(matches)?;
     }
+
     Ok(())
 }
