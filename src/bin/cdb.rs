@@ -11,12 +11,6 @@ use memmap::Mmap;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 
-struct Reader {
-    file: File,
-    map: Option<Mmap>,
-    access: AccessType,
-}
-
 enum AccessType {
     Mmap,
     Reader,
@@ -33,22 +27,17 @@ impl<'a> From<&'a str> for AccessType {
     }
 }
 
-impl Reader {
-    pub fn new(fname: &str, access: AccessType) -> std::io::Result<Self> {
+impl AccessType {
+    fn open<'a>(&self, fname: &str) -> std::io::Result<Box<CDBLookup + 'a>> {
         let file = File::open(fname)?;
-        let map = match access {
-            AccessType::Mmap => Some(unsafe { Mmap::map(&file)? }),
-            _ => None,
-        };
 
-        Ok(Reader { file, map, access })
-    }
-
-    fn to_lookup<'a>(&'a self) -> std::io::Result<Box<CDBLookup + 'a>> {
-        Ok(match self.access {
-            AccessType::Mmap => Box::new(CDBReader::new(&self.map.as_ref().unwrap()[..])?),
-            AccessType::Reader => Box::new(CDBReader::from_file(&self.file)?),
-            AccessType::BufReader => Box::new(CDBReader::from_file(BufReader::new(&self.file))?),
+        Ok(match self {
+            AccessType::Mmap => {
+                let map = unsafe { Mmap::map(&file) }?;
+                Box::new(CDBReader::new(map)?)
+            }
+            AccessType::Reader => Box::new(CDBReader::from_file(file)?),
+            AccessType::BufReader => Box::new(CDBReader::from_file(BufReader::new(file))?),
         })
     }
 }
@@ -59,8 +48,7 @@ fn access_type(matches: &ArgMatches) -> AccessType {
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
     let access = access_type(matches);
-    let r = Reader::new(matches.value_of("cdbfile").unwrap(), access)?;
-    let reader = r.to_lookup()?;
+    let reader = access.open(matches.value_of("cdbfile").unwrap())?;
 
     let key = matches.value_of("key").unwrap().as_bytes();
     let recno = matches.value_of("recno");
@@ -85,8 +73,7 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
 
 fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
     let access = access_type(matches);
-    let r = Reader::new(matches.value_of("cdbfile").unwrap(), access)?;
-    let reader = r.to_lookup()?;
+    let reader = access.open(matches.value_of("cdbfile").unwrap())?;
 
     for res in reader.iter() {
         let (k, v) = res?;
@@ -124,7 +111,7 @@ fn main() -> std::io::Result<()> {
                 .about("dump")
                 .arg(newline_arg.clone())
                 .arg(access_arg.clone())
-                .arg(cdbfile_arg.clone())
+                .arg(cdbfile_arg.clone()),
         )
         .get_matches();
 

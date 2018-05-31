@@ -42,14 +42,16 @@ pub trait CDBAccess {
     fn len(&self) -> u64;
 }
 
-impl<'c> CDBAccess for &'c [u8] {
+impl<T> CDBAccess for T
+    where T: AsRef<[u8]>
+{
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
         let pos = pos as usize;
-        Ok(Cow::from(&self[pos..pos + len]))
+        Ok(Cow::from(&self.as_ref()[pos..pos + len]))
     }
 
     fn len(&self) -> u64 {
-        (*self).len() as u64
+        self.as_ref().len() as u64
     }
 }
 
