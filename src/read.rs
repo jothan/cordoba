@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io;
 use std::io::prelude::*;
-use std::io::{Cursor, SeekFrom};
+use std::io::{Cursor, ErrorKind, SeekFrom};
 use std::iter::Chain;
 use std::ops::Range;
 
@@ -32,7 +32,10 @@ pub trait CDBAccess {
 
             *table = PosLen { pos, len };
             if !table.valid(self.len()) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, ""));
+                return Err(io::Error::new(
+                    ErrorKind::InvalidData,
+                    "a hash table is beyond the end of this file",
+                ));
             }
         }
         Ok(tables)
@@ -43,11 +46,15 @@ pub trait CDBAccess {
 }
 
 impl<T> CDBAccess for T
-    where T: AsRef<[u8]>
+where
+    T: AsRef<[u8]>,
 {
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
         let pos = pos as usize;
-        Ok(Cow::from(&self.as_ref()[pos..pos + len]))
+        let res = self.as_ref().get(pos..pos + len).ok_or_else(|| {
+            io::Error::new(ErrorKind::UnexpectedEof, "tried to read beyond buffer")
+        })?;
+        Ok(Cow::from(res))
     }
 
     fn len(&self) -> u64 {
