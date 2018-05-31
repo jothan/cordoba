@@ -1,7 +1,19 @@
+#![cfg_attr(feature = "python", feature(specialization, proc_macro))]
+
 extern crate byteorder;
 
 mod read;
 mod write;
+
+#[cfg(feature = "python")]
+#[macro_use]
+extern crate pyo3;
+
+#[cfg(feature = "python")]
+mod pymod;
+
+#[cfg(feature = "python")]
+pub use pymod::PyInit_cordoba;
 
 pub use self::read::*;
 pub use self::write::CDBWriter;

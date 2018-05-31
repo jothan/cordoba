@@ -11,6 +11,9 @@ readme = "README.md"
 keywords = ["cdb", "python"]
 categories = ["database", "data-structures", "config", "filesystem"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [profile.release]
 panic = "abort"
 
@@ -19,9 +22,14 @@ byteorder = "1"
 clap = { version="2.31", optional=true }
 memmap = { version="0.6.2", optional=true }
 
+[dependencies.pyo3]
+version = "0.2"
+optional = true
+
 [features]
 default = ["build-binary"]
 build-binary = ["clap", "memmap"]
+python = ["pyo3"]
 
 [[bin]]
 name = "cdb"
