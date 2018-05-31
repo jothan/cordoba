@@ -43,7 +43,7 @@ where
 
     fn get_data(&self, pos: u64, len: usize) -> io::Result<Self::Output>;
     fn len(&self) -> u64;
-    fn to_vec(Self::Output) -> Vec<u8>;
+    fn to_vec(out: Self::Output) -> Vec<u8>;
 }
 
 impl<'c> CDBAccess for &'c [u8] {
