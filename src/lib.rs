@@ -6,8 +6,10 @@ mod read;
 mod write;
 
 #[cfg(feature = "python")]
-#[macro_use]
 extern crate pyo3;
+
+#[cfg(feature = "python")]
+extern crate memmap;
 
 #[cfg(feature = "python")]
 mod pymod;

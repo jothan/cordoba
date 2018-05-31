@@ -29,7 +29,7 @@ optional = true
 [features]
 default = ["build-binary"]
 build-binary = ["clap", "memmap"]
-python = ["pyo3"]
+python = ["pyo3", "memmap"]
 
 [[bin]]
 name = "cdb"
