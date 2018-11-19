@@ -15,5 +15,5 @@ memmap = { version="0.6.2" }
 cordoba = { path = ".." }
 
 [dependencies.pyo3]
-version = "0.2"
+version = "0.5"
 

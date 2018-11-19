@@ -1,4 +1,4 @@
-#![feature(specialization, proc_macro)]
+#![feature(specialization, proc_macro, nll)]
 
 extern crate cordoba;
 extern crate pyo3;
@@ -9,13 +9,12 @@ use std::io;
 
 use memmap::Mmap;
 
+#[macro_use]
 use pyo3::prelude::*;
-use pyo3::class::{PyIterProtocol, PyMappingProtocol};
-use pyo3::exc;
-use pyo3::py::class as pyclass;
-use pyo3::py::methods as pymethods;
-use pyo3::py::modinit as pymodinit;
-use pyo3::py::proto as pyproto;
+use pyo3::{PyIterProtocol, PyMappingProtocol};
+use pyo3::types::PyBytes;
+use pyo3::types::exceptions as exc;
+use pyo3::PyObjectWithToken;
 
 use cordoba::{CDBLookup, CDBReader};
 
@@ -40,7 +39,7 @@ impl Reader {
 impl PyMappingProtocol for Reader {
     fn __getitem__(&self, key: &PyBytes) -> PyResult<PyObject> {
         let py = self.py();
-        match self.reader.get(key.data()) {
+        match self.reader.get(key.as_bytes()) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
             Some(Err(e)) => Err(e.into()),
             None => Err(PyErr::new::<exc::IndexError, _>(key.to_object(py))),
