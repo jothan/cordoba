@@ -3,6 +3,7 @@ name = "cordoba"
 description = "Zero-copy and mmapable CDB access library with a Python interface"
 version = "0.1.1"
 authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
+edition = "2018"
 
 homepage = "https://github.com/jothan/cordoba"
 repository = "https://github.com/jothan/cordoba.git"
