@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 
 use cordoba::CDBReader;
 use memmap::Mmap;
@@ -27,24 +28,30 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
         return Ok(());
     }
 
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
     for v in reader.lookup(key) {
         let v = v?;
-        std::io::stdout().write_all(&v)?;
-        std::io::stdout().write_all(b"\n")?;
+        handle.write_all(&v)?;
+        handle.write_all(b"\n")?;
     }
 
     Ok(())
 }
 
 fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
-    let reader = cdb_open(matches.value_of("cdbfile").unwrap())?;
+    let reader = Arc::new(cdb_open(matches.value_of("cdbfile").unwrap())?);
+    let mut iter = reader.iter();
 
-    for res in reader.iter() {
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+
+    while let Some(res) = iter.next() {
         let (k, v) = res?;
-        std::io::stdout().write_all(&k)?;
-        std::io::stdout().write_all(b" = ")?;
-        std::io::stdout().write_all(&v)?;
-        std::io::stdout().write_all(b"\n")?;
+        handle.write_all(&k)?;
+        handle.write_all(b" = ")?;
+        handle.write_all(&v)?;
+        handle.write_all(b"\n")?;
     }
 
     Ok(())

@@ -6,22 +6,22 @@ extern crate memmap;
 
 use std::fs::File;
 use std::io;
+use std::sync::Arc;
 
 use memmap::Mmap;
 
 #[macro_use]
 use pyo3::prelude::*;
-use pyo3::{PyIterProtocol, PyMappingProtocol};
+use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
 use pyo3::types::PyBytes;
 use pyo3::types::exceptions as exc;
-use pyo3::PyObjectWithToken;
+use pyo3::PyObjectWithGIL;
 
-use cordoba::{CDBLookup, CDBReader};
+use cordoba::{CDBReader, FileIter};
 
 #[pyclass]
 struct Reader {
-    reader: CDBReader<Mmap>,
-    token: PyToken,
+    reader: Arc<CDBReader<Mmap>>,
 }
 
 #[pymethods]
@@ -30,8 +30,8 @@ impl Reader {
     fn __new__(obj: &PyRawObject, fname: &str) -> PyResult<()> {
         let file = File::open(fname)?;
         let map = unsafe { Mmap::map(&file) }?;
-        let reader = CDBReader::new(map)?;
-        obj.init(|token| Reader { reader, token })
+        let reader = Arc::new(CDBReader::new(map)?);
+        obj.init(|| Reader { reader })
     }
 }
 
@@ -49,20 +49,28 @@ impl PyMappingProtocol for Reader {
 
 
 #[pyclass]
-struct FileIter {
-    iter: Box<Iterator<Item=io::Result<(Vec<u8>, Vec<u8>)>>>,
-    token: PyToken,
+struct PyFileIter {
+    iter: FileIter<Mmap>,
 }
 
+//#[pymethods]
+/*impl PyFileIter {
+    #[new]
+    fn __new__(obj: &PyRawObject, num: i32) -> PyResult<()> {
+
+    }
+}*/
+
 #[pyproto]
-impl PyIterProtocol for FileIter {
+impl PyIterProtocol for PyFileIter {
     fn __iter__(& mut self) -> PyResult<PyObject> {
         Ok(self.into())
     }
 
-    fn __next__(&mut self) -> PyResult<Option<PyObject>> {
+    fn __next__(&mut self) -> PyResult<PyObject> {
+        let v2: String = String::new();
         match self.iter.next() {
-            Some(Ok((k, v))) => Ok(Some((k, v).to_object(self.py()))),
+            Some(Ok((k, v))) => Ok(v2),
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }
@@ -72,18 +80,15 @@ impl PyIterProtocol for FileIter {
 #[pyproto]
 impl PyIterProtocol for Reader
 {
-    fn __iter__(&mut self) -> PyResult<PyObject> {
-        let lookup : Box<CDBLookup> = Box::new(self.reader);
-        let iter = lookup.iter().map(|res| res.map(|(k, v)| (k.to_vec(), v.to_vec())));
-
-        Ok(FileIter{iter: Box::new(iter), token: self.token }.to_object(self.py()))
+    fn __iter__(&mut self) -> PyResult<PyFileIter> {
+        Ok(PyFileIter{iter: self.reader.clone().iter() })
     }
 }
 
-#[pymodinit(cordoba)]
-fn init_mod(_py: Python, m: &PyModule) -> PyResult<()> {
+#[pymodule]
+fn cordoba(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Reader>()?;
-    m.add_class::<FileIter>()?;
+    m.add_class::<PyFileIter>()?;
 
     Ok(())
 }

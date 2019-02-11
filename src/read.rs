@@ -4,6 +4,7 @@ use std::io::{Cursor, ErrorKind};
 use std::iter::Chain;
 use std::ops::Range;
 use core::ops::Deref;
+use std::sync::Arc;
 
 use super::*;
 use byteorder::{ReadBytesExt, LE};
@@ -59,8 +60,8 @@ pub struct CDBReader<A> {
 }
 
 #[derive(Clone)]
-pub struct FileIter<'c, A> {
-    cdb: &'c CDBReader<A>,
+pub struct FileIter<A> {
+    cdb: Arc<CDBReader<A>>,
     pos: usize,
 }
 
@@ -75,10 +76,8 @@ struct LookupIter<'c, 'k, A>
     done: bool,
 }
 
-impl<'c, A: CDBAccess + 'c> Iterator for FileIter<'c, A> {
-    type Item = io::Result<(&'c [u8], &'c [u8])>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+impl<A: CDBAccess> FileIter<A> {
+    pub fn next<'a>(&'a mut self) -> Option<io::Result<(&'a [u8], &'a [u8])>> {
         if self.pos < self.cdb.tables[0].pos {
             match self.cdb.get_data(self.pos) {
                 Ok((k, v, newpos)) => {
@@ -168,18 +167,6 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A>
     }
 }
 
-impl<'c, A: CDBAccess> IntoIterator for &'c CDBReader<A> {
-    type IntoIter = FileIter<'c, A>;
-    type Item = <FileIter<'c, A> as Iterator>::Item;
-
-    fn into_iter(self) -> Self::IntoIter {
-        FileIter {
-            cdb: self,
-            pos: ENTRIES * PAIR_SIZE,
-        }
-    }
-}
-
 type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
 impl<A: CDBAccess> CDBReader<A> {
@@ -202,8 +189,11 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = io::Result<(&'a [u8], &'a [u8])>> {
-        self.into_iter()
+    pub fn iter(self: Arc<Self>) -> FileIter<A> {
+        FileIter{
+            cdb: self,
+            pos: ENTRIES * PAIR_SIZE,
+        }
     }
 
     pub fn lookup<'k, 'c: 'k>(&'c self, key: &'k [u8]) -> impl Iterator<Item = io::Result<&'c [u8]>> + 'k

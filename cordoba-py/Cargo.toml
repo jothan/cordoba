@@ -3,6 +3,7 @@ name = "cordoba-py"
 description = "Cordoba Python interface"
 version = "0.1.1"
 authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
+edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -11,9 +12,10 @@ crate-type = ["cdylib", "rlib"]
 panic = "abort"
 
 [dependencies]
-memmap = { version="0.6.2" }
+memmap = { version="0.7.0" }
 cordoba = { path = ".." }
 
 [dependencies.pyo3]
-version = "0.5"
+version = "0.6.0-alpha.2"
+features = ["extension-module"]
 

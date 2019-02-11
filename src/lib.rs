@@ -1,3 +1,5 @@
+#![feature(nll, arbitrary_self_types)]
+
 use byteorder;
 
 mod read;
