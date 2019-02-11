@@ -1,16 +1,15 @@
-use std::borrow::Cow;
-use std::cell::RefCell;
+use std::borrow::{Borrow};
 use std::io;
-use std::io::prelude::*;
-use std::io::{Cursor, ErrorKind, SeekFrom};
+use std::io::{Cursor, ErrorKind};
 use std::iter::Chain;
 use std::ops::Range;
+use core::ops::Deref;
 
 use super::*;
 use byteorder::{ReadBytesExt, LE};
 
-pub trait CDBAccess {
-    fn read_pair(&self, pos: u64) -> io::Result<(usize, usize)> {
+pub trait CDBAccess: Deref<Target=[u8]> {
+    fn read_pair(&self, pos: usize) -> io::Result<(usize, usize)> {
         let data = self.get_data(pos, PAIR_SIZE)?;
         let mut cur = Cursor::new(data);
 
@@ -41,81 +40,18 @@ pub trait CDBAccess {
         Ok(tables)
     }
 
-    fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>>;
-    fn len(&self) -> u64;
-}
-
-impl<T> CDBAccess for T
-where
-    T: AsRef<[u8]>,
-{
-    fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
-        let pos = pos as usize;
-        let res = self.as_ref().get(pos..pos + len).ok_or_else(|| {
+    fn get_data(&self, pos: usize, len: usize) -> io::Result<&[u8]> {
+        let res = self.get(pos..pos + len).ok_or_else(|| {
             io::Error::new(ErrorKind::UnexpectedEof, "tried to read beyond buffer")
         })?;
-        Ok(Cow::from(res))
-    }
-
-    fn len(&self) -> u64 {
-        self.as_ref().len() as u64
+        Ok(res)
     }
 }
 
-struct CDBFile<T> {
-    file: T,
-    pos: u64,
-    size: u64,
-}
-
-impl<T: Read + Seek> CDBFile<T> {
-    fn new(mut file: T) -> io::Result<Self> {
-        let size = file.seek(SeekFrom::End(0))?;
-        Ok(CDBFile {
-            file,
-            pos: size,
-            size,
-        })
-    }
-
-    fn read(&mut self, pos: u64, out: &mut [u8]) -> io::Result<()> {
-        if pos != self.pos {
-            self.file.seek(SeekFrom::Start(pos as u64))?;
-            self.pos = pos;
-        }
-
-        match self.file.read_exact(out) {
-            Ok(_) => {
-                self.pos += out.len() as u64;
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
-    }
-}
-
-pub struct CDBFileAccess<T>(RefCell<CDBFile<T>>);
-
-impl<T: Read + Seek> CDBFileAccess<T> {
-    pub fn new(file: T) -> io::Result<Self> {
-        Ok(CDBFileAccess(RefCell::new(CDBFile::new(file)?)))
-    }
-}
-
-impl<T: Read + Seek> CDBAccess for CDBFileAccess<T> {
-    fn get_data(&self, pos: u64, len: usize) -> io::Result<Cow<[u8]>> {
-        let mut out = Vec::with_capacity(len);
-        out.resize(len, 0);
-        let mut file = self.0.borrow_mut();
-        file.read(pos, &mut out)?;
-
-        Ok(Cow::from(out))
-    }
-
-    fn len(&self) -> u64 {
-        self.0.borrow().size
-    }
-}
+use memmap::Mmap;
+impl CDBAccess for Mmap {}
+impl CDBAccess for Vec<u8> {}
+impl CDBAccess for &[u8] {}
 
 pub struct CDBReader<A> {
     access: A,
@@ -129,7 +65,8 @@ pub struct FileIter<'c, A> {
 }
 
 #[derive(Clone)]
-struct LookupIter<'c, 'k, A> {
+struct LookupIter<'c, 'k, A>
+{
     cdb: &'c CDBReader<A>,
     table_pos: usize,
     key: &'k [u8],
@@ -138,8 +75,8 @@ struct LookupIter<'c, 'k, A> {
     done: bool,
 }
 
-impl<'c, A: CDBAccess> Iterator for FileIter<'c, A> {
-    type Item = io::Result<(Cow<'c, [u8]>, Cow<'c, [u8]>)>;
+impl<'c, A: CDBAccess + 'c> Iterator for FileIter<'c, A> {
+    type Item = io::Result<(&'c [u8], &'c [u8])>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos < self.cdb.tables[0].pos {
@@ -159,10 +96,13 @@ impl<'c, A: CDBAccess> Iterator for FileIter<'c, A> {
     }
 }
 
-impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A> {
+impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A>
+    where A: CDBAccess,
+{
     fn new(cdb: &'c CDBReader<A>, key: &'k [u8]) -> Self {
+        let cdb_ref = cdb.borrow();
         let khash = CDBHash::new(key);
-        let table = &cdb.tables[khash.table()];
+        let table = &cdb_ref.tables[khash.table()];
 
         let start_pos = if table.len != 0 {
             khash.slot(table.len)
@@ -182,18 +122,21 @@ impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A> {
     }
 }
 
-impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
-    type Item = io::Result<Cow<'c, [u8]>>;
+impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A>
+{
+    type Item = io::Result<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let cdb_ref = self.cdb.borrow();
+
         if self.done {
             return None;
         }
 
         while let Some(tableidx) = self.iter.next() {
-            let pos = (self.table_pos + tableidx * PAIR_SIZE) as u64;
+            let pos = self.table_pos + tableidx * PAIR_SIZE;
 
-            let (hash, ptr) = match self.cdb.access.read_pair(pos) {
+            let (hash, ptr) = match cdb_ref.access.read_pair(pos) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -209,7 +152,7 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
                 continue;
             }
 
-            let (k, v, _) = match self.cdb.get_data(ptr as usize) {
+            let (k, v, _) = match cdb_ref.get_data(ptr as usize) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -237,7 +180,7 @@ impl<'c, A: CDBAccess> IntoIterator for &'c CDBReader<A> {
     }
 }
 
-type KeyValueNext<O> = (O, O, usize);
+type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
 impl<A: CDBAccess> CDBReader<A> {
     pub fn new(access: A) -> io::Result<CDBReader<A>> {
@@ -245,61 +188,30 @@ impl<A: CDBAccess> CDBReader<A> {
         Ok(CDBReader { access, tables })
     }
 
-    fn get_data(&self, pos: usize) -> io::Result<KeyValueNext<Cow<[u8]>>> {
-        let (klen, vlen) = self.access.read_pair(pos as u64)?;
+    fn get_data<'a>(&'a self, pos: usize) -> io::Result<KeyValueNext<'a>> {
+        let (klen, vlen) = self.access.read_pair(pos)?;
 
         let keystart = pos + PAIR_SIZE;
         let keyend = keystart + klen;
         let valend = keyend + vlen;
 
         Ok((
-            self.access.get_data(keystart as u64, klen)?,
-            self.access.get_data(keyend as u64, vlen)?,
+            self.access.get_data(keystart, klen)?,
+            self.access.get_data(keyend, vlen)?,
             valend,
         ))
     }
 
-    pub fn iter<'c>(&'c self) -> impl Iterator<Item = io::Result<(Cow<[u8]>, Cow<[u8]>)>> + 'c {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = io::Result<(&'a [u8], &'a [u8])>> {
         self.into_iter()
     }
 
-    pub fn lookup<'c>(
-        &'c self,
-        key: &'c [u8],
-    ) -> impl Iterator<Item = io::Result<Cow<'c, [u8]>>> + 'c {
+    pub fn lookup<'k, 'c: 'k>(&'c self, key: &'k [u8]) -> impl Iterator<Item = io::Result<&'c [u8]>> + 'k
+    {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'c>(&'c self, key: &'c [u8]) -> Option<io::Result<Cow<'c, [u8]>>> {
+    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> Option<io::Result<&'c [u8]>> {
         self.lookup(key).nth(0)
-    }
-}
-
-pub trait CDBLookup {
-    fn iter<'c>(&'c self) -> Box<Iterator<Item = io::Result<(Cow<'c, [u8]>, Cow<'c, [u8]>)>> + 'c>;
-    fn lookup<'c>(&'c self, key: &'c [u8]) -> Box<Iterator<Item = io::Result<Cow<'c, [u8]>>> + 'c>;
-    fn get<'c>(&'c self, key: &'c [u8]) -> Option<io::Result<Cow<'c, [u8]>>>;
-}
-
-impl<A: CDBAccess> CDBLookup for CDBReader<A> {
-    fn iter<'c>(&'c self) -> Box<Iterator<Item = io::Result<(Cow<'c, [u8]>, Cow<'c, [u8]>)>> + 'c> {
-        Box::new(CDBReader::iter(self))
-    }
-
-    fn lookup<'c>(&'c self, key: &'c [u8]) -> Box<Iterator<Item = io::Result<Cow<'c, [u8]>>> + 'c> {
-        Box::new(CDBReader::lookup(self, key))
-    }
-
-    fn get<'c>(&'c self, key: &'c [u8]) -> Option<io::Result<Cow<'c, [u8]>>> {
-        CDBReader::get(self, key)
-    }
-}
-
-impl<F> CDBReader<CDBFileAccess<F>>
-where
-    F: Read + Seek,
-{
-    pub fn from_file(file: F) -> io::Result<Self> {
-        CDBReader::new(CDBFileAccess::new(file)?)
     }
 }

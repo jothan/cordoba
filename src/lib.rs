@@ -17,8 +17,8 @@ pub struct PosLen {
 }
 
 impl PosLen {
-    fn valid(&self, datalen: u64) -> bool {
-        (self.pos + self.len) as u64 <= datalen
+    fn valid(&self, datalen: usize) -> bool {
+        (self.pos + self.len) <= datalen
     }
 }
 
