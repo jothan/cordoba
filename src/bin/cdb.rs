@@ -1,11 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, Write};
 
-extern crate cordoba;
-
-extern crate clap;
-extern crate memmap;
-
 use cordoba::{CDBLookup, CDBReader};
 use memmap::Mmap;
 

@@ -1,5 +1,3 @@
-extern crate cordoba;
-extern crate memmap;
 
 use std::fs::File;
 use std::io::BufWriter;

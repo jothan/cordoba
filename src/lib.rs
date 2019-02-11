@@ -1,4 +1,4 @@
-extern crate byteorder;
+use byteorder;
 
 mod read;
 mod write;

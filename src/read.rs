@@ -123,13 +123,13 @@ pub struct CDBReader<A> {
 }
 
 #[derive(Clone)]
-pub struct FileIter<'c, A: 'c> {
+pub struct FileIter<'c, A> {
     cdb: &'c CDBReader<A>,
     pos: usize,
 }
 
 #[derive(Clone)]
-struct LookupIter<'c, 'k, A: 'c> {
+struct LookupIter<'c, 'k, A> {
     cdb: &'c CDBReader<A>,
     table_pos: usize,
     key: &'k [u8],
