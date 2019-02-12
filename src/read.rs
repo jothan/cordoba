@@ -1,4 +1,3 @@
-use std::borrow::{Borrow};
 use std::io;
 use std::io::{Cursor, ErrorKind};
 use std::iter::Chain;
@@ -67,11 +66,12 @@ pub struct FileIter<A, B>
 }
 
 #[derive(Clone)]
-struct LookupIter<'c, 'k, A>
+pub struct LookupIter<A, B>
+    where B: Deref<Target=CDBReader<A>>
 {
-    cdb: &'c CDBReader<A>,
+    cdb: B,
     table_pos: usize,
-    key: &'k [u8],
+    key: Vec<u8>, // FIXME
     khash: CDBHash,
     iter: Chain<Range<usize>, Range<usize>>,
     done: bool,
@@ -98,10 +98,10 @@ impl<A: CDBAccess, B> FileIter<A, B>
     }
 }
 
-impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A>
-    where A: CDBAccess,
+impl<A: CDBAccess, B> LookupIter<A, B>
+    where B: Deref<Target=CDBReader<A>>,
 {
-    fn new(cdb: &'c CDBReader<A>, key: &'k [u8]) -> Self {
+    fn new(cdb: B, key: &[u8]) -> Self {
         let khash = CDBHash::new(key);
         let table = cdb.tables[khash.table()];
 
@@ -114,22 +114,15 @@ impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A>
 
         LookupIter {
             cdb,
-            key,
+            key: key.to_vec(),
             khash,
             iter,
             table_pos: table.pos,
             done: false,
         }
     }
-}
 
-impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A>
-{
-    type Item = io::Result<&'c [u8]>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let cdb_ref = self.cdb.borrow();
-
+    pub fn next<'a>(&'a mut self) -> Option<io::Result<&'a [u8]>> {
         if self.done {
             return None;
         }
@@ -137,7 +130,7 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A>
         while let Some(tableidx) = self.iter.next() {
             let pos = self.table_pos + tableidx * PAIR_SIZE;
 
-            let (hash, ptr) = match cdb_ref.access.read_pair(pos) {
+            let (hash, ptr) = match self.cdb.access.read_pair(pos) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -153,14 +146,14 @@ impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A>
                 continue;
             }
 
-            let (k, v, _) = match cdb_ref.get_data(ptr as usize) {
+            let (k, v, _) = match self.cdb.get_data(ptr as usize) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
                     return Some(Err(e));
                 }
             };
-            if k.as_ref() == self.key {
+            if k == self.key.as_slice() {
                 return Some(Ok(v));
             }
         }
@@ -201,12 +194,9 @@ impl<A: CDBAccess> CDBReader<A> {
         }
     }
 
-    pub fn lookup<'k, 'c: 'k>(&'c self, key: &'k [u8]) -> impl Iterator<Item = io::Result<&'c [u8]>> + 'k
+    pub fn lookup<B>(self: B, key: &[u8]) -> LookupIter<A, B>
+        where B: Deref<Target=Self>,
     {
         LookupIter::new(self, key)
-    }
-
-    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> Option<io::Result<&'c [u8]>> {
-        self.lookup(key).nth(0)
     }
 }
