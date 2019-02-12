@@ -4,7 +4,6 @@ use std::io::{Cursor, ErrorKind};
 use std::iter::Chain;
 use std::ops::Range;
 use core::ops::Deref;
-use std::sync::Arc;
 
 use super::*;
 use byteorder::{ReadBytesExt, LE};
@@ -60,8 +59,10 @@ pub struct CDBReader<A> {
 }
 
 #[derive(Clone)]
-pub struct FileIter<A> {
-    cdb: Arc<CDBReader<A>>,
+pub struct FileIter<A, B>
+    where B: Deref<Target=CDBReader<A>>
+{
+    cdb: B,
     pos: usize,
 }
 
@@ -76,7 +77,9 @@ struct LookupIter<'c, 'k, A>
     done: bool,
 }
 
-impl<A: CDBAccess> FileIter<A> {
+impl<A: CDBAccess, B> FileIter<A, B>
+    where B: Deref<Target=CDBReader<A>>
+{
     pub fn next<'a>(&'a mut self) -> Option<io::Result<(&'a [u8], &'a [u8])>> {
         if self.pos < self.cdb.tables[0].pos {
             match self.cdb.get_data(self.pos) {
@@ -188,9 +191,12 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter(self: Arc<Self>) -> FileIter<A> {
+    pub fn iter<B>(self: &B) -> FileIter<A, B>
+        where B: Deref<Target=Self>,
+              B: Clone
+    {
         FileIter{
-            cdb: self,
+            cdb: self.clone(),
             pos: ENTRIES * PAIR_SIZE,
         }
     }

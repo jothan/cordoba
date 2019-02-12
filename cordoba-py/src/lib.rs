@@ -5,7 +5,7 @@ extern crate pyo3;
 extern crate memmap;
 
 use std::fs::File;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use memmap::Mmap;
 
@@ -19,7 +19,7 @@ use cordoba::{CDBReader, FileIter};
 
 #[pyclass]
 struct Reader {
-    reader: Arc<CDBReader<Mmap>>,
+    reader: Rc<CDBReader<Mmap>>,
 }
 
 #[pymethods]
@@ -28,7 +28,7 @@ impl Reader {
     fn __new__(obj: &PyRawObject, fname: &str) -> PyResult<()> {
         let file = File::open(fname)?;
         let map = unsafe { Mmap::map(&file) }?;
-        let reader = Arc::new(CDBReader::new(map)?);
+        let reader = Rc::new(CDBReader::new(map)?);
         obj.init(|| Reader { reader })
     }
 }
@@ -50,7 +50,7 @@ impl PyMappingProtocol for Reader {
 
 #[pyclass]
 struct PyFileIter {
-    iter: FileIter<Mmap>,
+    iter: FileIter<Mmap, Rc<CDBReader<Mmap>>>,
 }
 
 #[pyproto]
@@ -77,7 +77,7 @@ impl PyIterProtocol for PyFileIter {
 impl PyIterProtocol for Reader
 {
     fn __iter__(&mut self) -> PyResult<PyFileIter> {
-        Ok(PyFileIter{iter: self.reader.clone().iter() })
+        Ok(PyFileIter{iter: self.reader.iter() })
     }
 }
 
