@@ -71,7 +71,6 @@ pub struct LookupIter<A, B>
 {
     cdb: B,
     table_pos: usize,
-    key: Vec<u8>, // FIXME
     khash: CDBHash,
     iter: Chain<Range<usize>, Range<usize>>,
     done: bool,
@@ -114,7 +113,6 @@ impl<A: CDBAccess, B> LookupIter<A, B>
 
         LookupIter {
             cdb,
-            key: key.to_vec(),
             khash,
             iter,
             table_pos: table.pos,
@@ -122,7 +120,7 @@ impl<A: CDBAccess, B> LookupIter<A, B>
         }
     }
 
-    pub fn next<'a>(&'a mut self) -> Option<io::Result<&'a [u8]>> {
+    pub fn next<'a>(&'a mut self, key: &[u8]) -> Option<io::Result<&'a [u8]>> {
         if self.done {
             return None;
         }
@@ -153,7 +151,7 @@ impl<A: CDBAccess, B> LookupIter<A, B>
                     return Some(Err(e));
                 }
             };
-            if k == self.key.as_slice() {
+            if k == key {
                 return Some(Ok(v));
             }
         }

@@ -31,7 +31,7 @@ impl Reader {
     }
 
     fn get_all(&self, key: &PyBytes) -> PyLookupIter {
-        PyLookupIter{iter: self.reader.clone().lookup(key.as_bytes())}
+        PyLookupIter{key: key.into(), iter: self.reader.clone().lookup(key.as_bytes())}
     }
 }
 
@@ -40,9 +40,10 @@ impl PyMappingProtocol for Reader {
     fn __getitem__(&self, key: &PyBytes) -> PyResult<PyObject> {
         let gil = Python::acquire_gil();
         let py = gil.python();
-        let mut lu = self.reader.clone().lookup(key.as_bytes());
+        let key_bytes = key.as_bytes();
+        let mut lu = self.reader.clone().lookup(key_bytes);
 
-        match lu.next() {
+        match lu.next(key_bytes) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
             Some(Err(e)) => Err(e.into()),
             None => Err(PyErr::new::<exc::KeyError, _>(key.to_object(py))),
@@ -77,6 +78,7 @@ impl PyIterProtocol for PyFileIter {
 }
 #[pyclass]
 struct PyLookupIter {
+    key: PyObject,
     iter: LookupIter<Mmap, Rc<CDBReader<Mmap>>>,
 }
 
@@ -90,7 +92,9 @@ impl PyIterProtocol for PyLookupIter {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        match self.iter.next() {
+        let key_pybytes : &PyBytes = self.key.cast_as(py)?;
+
+        match self.iter.next(key_pybytes.as_bytes()) {
             Some(Ok(v)) => {
                 Ok(Some(PyBytes::new(py, v).into()))
             }
