@@ -1,5 +1,3 @@
-#![feature(specialization, nll)]
-
 extern crate cordoba;
 extern crate pyo3;
 extern crate memmap;

@@ -1,4 +1,4 @@
-#![feature(nll, arbitrary_self_types)]
+#![feature(arbitrary_self_types)]
 
 use byteorder;
 
