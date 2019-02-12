@@ -1,21 +1,19 @@
-#![feature(specialization, proc_macro, nll)]
+#![feature(specialization, nll)]
 
 extern crate cordoba;
 extern crate pyo3;
 extern crate memmap;
 
 use std::fs::File;
-use std::io;
 use std::sync::Arc;
 
 use memmap::Mmap;
 
-#[macro_use]
 use pyo3::prelude::*;
+use pyo3::{IntoPyTuple};
 use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes};
 use pyo3::types::exceptions as exc;
-use pyo3::PyObjectWithGIL;
 
 use cordoba::{CDBReader, FileIter};
 
@@ -38,11 +36,13 @@ impl Reader {
 #[pyproto]
 impl PyMappingProtocol for Reader {
     fn __getitem__(&self, key: &PyBytes) -> PyResult<PyObject> {
-        let py = self.py();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
         match self.reader.get(key.as_bytes()) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
             Some(Err(e)) => Err(e.into()),
-            None => Err(PyErr::new::<exc::IndexError, _>(key.to_object(py))),
+            None => Err(PyErr::new::<exc::KeyError, _>(key.to_object(py))),
         }
     }
 }
@@ -53,24 +53,20 @@ struct PyFileIter {
     iter: FileIter<Mmap>,
 }
 
-//#[pymethods]
-/*impl PyFileIter {
-    #[new]
-    fn __new__(obj: &PyRawObject, num: i32) -> PyResult<()> {
-
-    }
-}*/
-
 #[pyproto]
 impl PyIterProtocol for PyFileIter {
-    fn __iter__(& mut self) -> PyResult<PyObject> {
+    fn __iter__(&mut self) -> PyResult<PyObject> {
         Ok(self.into())
     }
 
-    fn __next__(&mut self) -> PyResult<PyObject> {
-        let v2: String = String::new();
+    fn __next__(&mut self) -> PyResult<Option<PyObject>> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
         match self.iter.next() {
-            Some(Ok((k, v))) => Ok(v2),
+            Some(Ok((k, v))) => {
+                Ok(Some((PyBytes::new(py, k), PyBytes::new(py, v)).into_tuple(py).into()))
+            }
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }

@@ -99,9 +99,8 @@ impl<'c, 'k, A: CDBAccess> LookupIter<'c, 'k, A>
     where A: CDBAccess,
 {
     fn new(cdb: &'c CDBReader<A>, key: &'k [u8]) -> Self {
-        let cdb_ref = cdb.borrow();
         let khash = CDBHash::new(key);
-        let table = &cdb_ref.tables[khash.table()];
+        let table = cdb.tables[khash.table()];
 
         let start_pos = if table.len != 0 {
             khash.slot(table.len)
