@@ -182,18 +182,17 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter<B>(self: &B) -> FileIter<A, B>
-        where B: Deref<Target=Self>,
-              B: Clone
+    pub fn iter<B>(self: B) -> FileIter<A, B>
+        where B: Deref<Target=Self>
     {
         FileIter{
-            cdb: self.clone(),
+            cdb: self,
             pos: ENTRIES * PAIR_SIZE,
         }
     }
 
     pub fn lookup<B>(self: B, key: &[u8]) -> LookupIter<A, B>
-        where B: Deref<Target=Self>,
+        where B: Deref<Target=Self>
     {
         LookupIter::new(self, key)
     }

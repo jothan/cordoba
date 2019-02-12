@@ -108,7 +108,7 @@ impl PyIterProtocol for PyLookupIter {
 impl PyIterProtocol for Reader
 {
     fn __iter__(&mut self) -> PyResult<PyFileIter> {
-        Ok(PyFileIter{iter: self.reader.iter() })
+        Ok(PyFileIter{iter: self.reader.clone().iter() })
     }
 }
 
