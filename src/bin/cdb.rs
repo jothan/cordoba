@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 
 use cordoba::CDBReader;
 use memmap::Mmap;
@@ -18,19 +17,27 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
     let reader = cdb_open(matches.value_of("cdbfile").unwrap())?;
     let key = matches.value_of("key").unwrap().as_bytes();
     let recno = matches.value_of("recno");
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    let mut lu = (&reader).lookup(key);
 
     if let Some(recno) = recno {
-        let recno = recno.parse::<usize>().unwrap() - 1;
-        if let Some(value) = reader.lookup(key).nth(recno) {
-            std::io::stdout().write_all(value?)?;
-            std::io::stdout().write_all(b"\n")?;
+        let recno = recno.parse().unwrap();
+        let mut n = 1;
+
+        while let Some(v) = lu.next(key) {
+            let v = v?;
+            if n == recno {
+                handle.write_all(&v)?;
+                handle.write_all(b"\n")?;
+                return Ok(());
+            }
+            n += 1
         }
         return Ok(());
     }
 
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-    for v in reader.lookup(key) {
+    while let Some(v) = lu.next(key) {
         let v = v?;
         handle.write_all(&v)?;
         handle.write_all(b"\n")?;
@@ -40,8 +47,8 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
 }
 
 fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
-    let reader = Arc::new(cdb_open(matches.value_of("cdbfile").unwrap())?);
-    let mut iter = reader.iter();
+    let reader = cdb_open(matches.value_of("cdbfile").unwrap())?;
+    let mut iter = (&reader).iter();
 
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
@@ -59,12 +66,6 @@ fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
 
 fn main() -> std::io::Result<()> {
     let newline_arg = Arg::with_name("newline").short("m");
-    let access_arg = Arg::with_name("access")
-        .long("access")
-        .takes_value(true)
-        .possible_value("mmap")
-        .possible_value("reader")
-        .possible_value("bufreader");
     let cdbfile_arg = Arg::with_name("cdbfile").index(1).required(true);
 
     let matches = App::new("cdb")
@@ -72,7 +73,6 @@ fn main() -> std::io::Result<()> {
             SubCommand::with_name("-q")
                 .about("query")
                 .arg(newline_arg.clone())
-                .arg(access_arg.clone())
                 .arg(Arg::with_name("recno").short("n").takes_value(true))
                 .arg(cdbfile_arg.clone())
                 .arg(Arg::with_name("key").index(2).required(true)),
@@ -81,7 +81,6 @@ fn main() -> std::io::Result<()> {
             SubCommand::with_name("-d")
                 .about("dump")
                 .arg(newline_arg.clone())
-                .arg(access_arg.clone())
                 .arg(cdbfile_arg.clone()),
         )
         .get_matches();
