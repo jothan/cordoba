@@ -58,36 +58,32 @@ pub struct CDBReader<A> {
 }
 
 #[derive(Clone)]
-pub struct FileIter<A, B>
+struct FileIter<'a, A>
+{
+    cdb: &'a CDBReader<A>,
+    pos: usize,
+}
+
+#[derive(Clone)]
+pub struct OwnedFileIter<A, B>
     where B: Deref<Target=CDBReader<A>>
 {
     cdb: B,
     pos: usize,
 }
 
-#[derive(Clone)]
-pub struct LookupIter<A, B>
-    where B: Deref<Target=CDBReader<A>>
+impl <'a, A: CDBAccess> FileIter<'a, A>
 {
-    cdb: B,
-    table_pos: usize,
-    khash: CDBHash,
-    iter: Chain<Range<usize>, Range<usize>>,
-    done: bool,
-}
-
-impl<A: CDBAccess, B> FileIter<A, B>
-    where B: Deref<Target=CDBReader<A>>
-{
-    pub fn next<'a>(&'a mut self) -> Option<io::Result<(&'a [u8], &'a [u8])>> {
-        if self.pos < self.cdb.tables[0].pos {
-            match self.cdb.get_data(self.pos) {
+    #[inline]
+    fn advance<'c>(cdb: &'c CDBReader<A>, pos: &mut usize) -> Option<io::Result<(&'c [u8], &'c [u8])>> {
+        if *pos < cdb.tables[0].pos {
+            match cdb.get_data(*pos) {
                 Ok((k, v, newpos)) => {
-                    self.pos = newpos;
+                    *pos = newpos;
                     Some(Ok((k, v)))
                 }
                 Err(e) => {
-                    self.pos = self.cdb.tables[0].pos;
+                    *pos = cdb.tables[0].pos;
                     Some(Err(e))
                 }
             }
@@ -97,10 +93,59 @@ impl<A: CDBAccess, B> FileIter<A, B>
     }
 }
 
-impl<A: CDBAccess, B> LookupIter<A, B>
-    where B: Deref<Target=CDBReader<A>>,
+impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
+    type Item = io::Result<(&'a [u8], &'a [u8])>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        FileIter::advance(self.cdb, &mut self.pos)
+    }
+}
+
+#[derive(Clone)]
+pub struct LookupIter<'c, 'k,  A>
 {
-    fn new(cdb: B, key: &[u8]) -> Self {
+    cdb: &'c CDBReader<A>,
+    key: &'k [u8],
+    state: LookupState,
+}
+
+impl <'c, 'k, A> LookupIter<'c, 'k, A> {
+    fn new(cdb: &'c CDBReader<A>, key: &'k [u8]) -> Self {
+        LookupIter {
+            cdb,
+            key,
+            state: LookupState::new(&cdb, key)
+        }
+    }
+}
+
+impl <'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
+    type Item = io::Result<&'c [u8]>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.state.next(self.cdb, self.key)
+    }
+}
+
+#[derive(Clone)]
+pub struct OwnedLookupIter<A, B>
+    where B: Deref<Target=CDBReader<A>>
+{
+    cdb: B,
+    state: LookupState,
+}
+
+#[derive(Clone)]
+struct LookupState {
+    table_pos: usize,
+    khash: CDBHash,
+    iter: Chain<Range<usize>, Range<usize>>,
+    done: bool,
+}
+
+impl LookupState {
+    #[inline]
+    fn new<A>(cdb: &CDBReader<A>, key: &[u8]) -> Self {
         let khash = CDBHash::new(key);
         let table = cdb.tables[khash.table()];
 
@@ -111,8 +156,7 @@ impl<A: CDBAccess, B> LookupIter<A, B>
         };
         let iter = (start_pos..(table.len)).chain(0..start_pos);
 
-        LookupIter {
-            cdb,
+        LookupState {
             khash,
             iter,
             table_pos: table.pos,
@@ -120,7 +164,8 @@ impl<A: CDBAccess, B> LookupIter<A, B>
         }
     }
 
-    pub fn next<'a>(&'a mut self, key: &[u8]) -> Option<io::Result<&'a [u8]>> {
+    #[inline]
+    fn next<'a, A: CDBAccess>(&mut self, cdb: &'a CDBReader<A>, key: &[u8]) -> Option<io::Result<&'a [u8]>> {
         if self.done {
             return None;
         }
@@ -128,7 +173,7 @@ impl<A: CDBAccess, B> LookupIter<A, B>
         while let Some(tableidx) = self.iter.next() {
             let pos = self.table_pos + tableidx * PAIR_SIZE;
 
-            let (hash, ptr) = match self.cdb.access.read_pair(pos) {
+            let (hash, ptr) = match cdb.access.read_pair(pos) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -144,7 +189,7 @@ impl<A: CDBAccess, B> LookupIter<A, B>
                 continue;
             }
 
-            let (k, v, _) = match self.cdb.get_data(ptr as usize) {
+            let (k, v, _) = match cdb.get_data(ptr as usize) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -160,6 +205,28 @@ impl<A: CDBAccess, B> LookupIter<A, B>
     }
 }
 
+impl<A: CDBAccess, B> OwnedFileIter<A, B>
+    where B: Deref<Target=CDBReader<A>>
+{
+    pub fn next(&mut self) -> Option<io::Result<(&[u8], &[u8])>> {
+        FileIter::advance(&self.cdb, &mut self.pos)
+    }
+}
+
+impl<A: CDBAccess, B> OwnedLookupIter<A, B>
+    where B: Deref<Target=CDBReader<A>>,
+{
+    fn new(cdb: B, key: &[u8]) -> Self {
+        let state = LookupState::new(&cdb, key);
+
+        OwnedLookupIter {cdb, state}
+    }
+
+    pub fn next(&mut self, key: &[u8]) -> Option<io::Result<&[u8]>> {
+        self.state.next(&self.cdb, key)
+    }
+}
+
 type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
 impl<A: CDBAccess> CDBReader<A> {
@@ -168,7 +235,7 @@ impl<A: CDBAccess> CDBReader<A> {
         Ok(CDBReader { access, tables })
     }
 
-    fn get_data<'a>(&'a self, pos: usize) -> io::Result<KeyValueNext<'a>> {
+    fn get_data(&self, pos: usize) -> io::Result<KeyValueNext<'_>> {
         let (klen, vlen) = self.access.read_pair(pos)?;
 
         let keystart = pos + PAIR_SIZE;
@@ -182,8 +249,7 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter<B>(self: B) -> FileIter<A, B>
-        where B: Deref<Target=Self>
+    pub fn iter(&self) -> impl Iterator<Item=io::Result<(&'_ [u8], &'_ [u8])>>
     {
         FileIter{
             cdb: self,
@@ -191,9 +257,28 @@ impl<A: CDBAccess> CDBReader<A> {
         }
     }
 
-    pub fn lookup<B>(self: B, key: &[u8]) -> LookupIter<A, B>
-        where B: Deref<Target=Self>
+    pub fn lookup<'c, 'k>(&'c self, key: &'k [u8]) -> LookupIter<'c, 'k,  A>
     {
         LookupIter::new(self, key)
+    }
+
+    pub fn get(&self, key: &[u8]) -> Option<io::Result<&[u8]>>
+    {
+        self.lookup(key).nth(0)
+    }
+
+    pub fn owned_iter<B>(self: B) -> OwnedFileIter<A, B>
+        where B: Deref<Target=Self>
+    {
+        OwnedFileIter{
+            cdb: self,
+            pos: ENTRIES * PAIR_SIZE,
+        }
+    }
+
+    pub fn owned_lookup<B>(self: B, key: &[u8]) -> OwnedLookupIter<A, B>
+        where B: Deref<Target=Self>
+    {
+        OwnedLookupIter::new(self, key)
     }
 }

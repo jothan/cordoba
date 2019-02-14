@@ -19,25 +19,23 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
     let recno = matches.value_of("recno");
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
-    let mut lu = (&reader).lookup(key);
 
     if let Some(recno) = recno {
-        let recno = recno.parse().unwrap();
-        let mut n = 1;
+        let recno : usize = recno.parse().unwrap();
+        if recno == 0 {
+            return Ok(())
+        }
 
-        while let Some(v) = lu.next(key) {
+        if let Some(v) = reader.lookup(key).nth(recno - 1) {
             let v = v?;
-            if n == recno {
-                handle.write_all(&v)?;
-                handle.write_all(b"\n")?;
-                return Ok(());
-            }
-            n += 1
+            handle.write_all(&v)?;
+            handle.write_all(b"\n")?;
+            return Ok(());
         }
         return Ok(());
     }
 
-    while let Some(v) = lu.next(key) {
+    for v in reader.lookup(key) {
         let v = v?;
         handle.write_all(&v)?;
         handle.write_all(b"\n")?;
@@ -48,12 +46,11 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
 
 fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
     let reader = cdb_open(matches.value_of("cdbfile").unwrap())?;
-    let mut iter = (&reader).iter();
 
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
 
-    while let Some(res) = iter.next() {
+    for res in reader.iter() {
         let (k, v) = res?;
         handle.write_all(&k)?;
         handle.write_all(b" = ")?;

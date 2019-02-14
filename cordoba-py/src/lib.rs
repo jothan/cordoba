@@ -13,7 +13,7 @@ use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
 use pyo3::types::{PyBytes};
 use pyo3::types::exceptions as exc;
 
-use cordoba::{CDBReader, FileIter, LookupIter};
+use cordoba::{CDBReader, OwnedFileIter, OwnedLookupIter};
 
 #[pyclass]
 struct Reader {
@@ -31,7 +31,7 @@ impl Reader {
     }
 
     fn get_all(&self, key: &PyBytes) -> PyLookupIter {
-        PyLookupIter{key: key.into(), iter: self.reader.clone().lookup(key.as_bytes())}
+        PyLookupIter{key: key.into(), iter: self.reader.clone().owned_lookup(key.as_bytes())}
     }
 }
 
@@ -41,7 +41,7 @@ impl PyMappingProtocol for Reader {
         let gil = Python::acquire_gil();
         let py = gil.python();
         let key_bytes = key.as_bytes();
-        let mut lu = self.reader.clone().lookup(key_bytes);
+        let mut lu = self.reader.clone().owned_lookup(key_bytes);
 
         match lu.next(key_bytes) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
@@ -54,7 +54,7 @@ impl PyMappingProtocol for Reader {
 
 #[pyclass]
 struct PyFileIter {
-    iter: FileIter<Mmap, Rc<CDBReader<Mmap>>>,
+    iter: OwnedFileIter<Mmap, Rc<CDBReader<Mmap>>>,
 }
 
 #[pyproto]
@@ -79,7 +79,7 @@ impl PyIterProtocol for PyFileIter {
 #[pyclass]
 struct PyLookupIter {
     key: PyObject,
-    iter: LookupIter<Mmap, Rc<CDBReader<Mmap>>>,
+    iter: OwnedLookupIter<Mmap, Rc<CDBReader<Mmap>>>,
 }
 
 #[pyproto]
@@ -108,7 +108,7 @@ impl PyIterProtocol for PyLookupIter {
 impl PyIterProtocol for Reader
 {
     fn __iter__(&mut self) -> PyResult<PyFileIter> {
-        Ok(PyFileIter{iter: self.reader.clone().iter() })
+        Ok(PyFileIter{iter: self.reader.clone().owned_iter() })
     }
 }
 
