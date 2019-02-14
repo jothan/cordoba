@@ -41,9 +41,8 @@ impl PyMappingProtocol for Reader {
         let gil = Python::acquire_gil();
         let py = gil.python();
         let key_bytes = key.as_bytes();
-        let mut lu = self.reader.clone().owned_lookup(key_bytes);
 
-        match lu.next(key_bytes) {
+        match self.reader.get(key_bytes) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
             Some(Err(e)) => Err(e.into()),
             None => Err(PyErr::new::<exc::KeyError, _>(key.to_object(py))),
