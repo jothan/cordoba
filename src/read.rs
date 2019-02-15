@@ -67,7 +67,7 @@ impl Default for IterState {
 }
 
 #[derive(Clone)]
-pub struct FileIter<'a, A>
+struct FileIter<'a, A>
 {
     cdb: &'a CDBReader<A>,
     state: IterState,
@@ -103,24 +103,24 @@ impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
 }
 
 #[derive(Clone)]
-pub struct LookupIter<'c, 'k,  A>
+struct LookupIter<'c,  A>
 {
     cdb: &'c CDBReader<A>,
-    key: &'k [u8],
+    key: &'c [u8],
     state: LookupState,
 }
 
-impl <'c, 'k, A> LookupIter<'c, 'k, A> {
-    fn new(cdb: &'c CDBReader<A>, key: &'k [u8]) -> Self {
+impl <'c, A> LookupIter<'c, A> {
+    fn new(cdb: &'c CDBReader<A>, key: &'c [u8]) -> Self {
         LookupIter {
             cdb,
             key,
-            state: LookupState::new(&cdb, key)
+            state: LookupState::new(cdb, key)
         }
     }
 }
 
-impl <'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
+impl <'c, A: CDBAccess> Iterator for LookupIter<'c, A> {
     type Item = io::Result<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -225,12 +225,12 @@ impl<A: CDBAccess> CDBReader<A> {
         FileIter{cdb: self, state: Default::default()}
     }
 
-    pub fn lookup<'c, 'k>(&'c self, key: &'k [u8]) -> LookupIter<'c, 'k,  A>
+    pub fn lookup<'a>(&'a self, key: &'a [u8]) -> impl Iterator<Item=io::Result<&'_ [u8]>>
     {
         LookupIter::new(self, key)
     }
 
-    pub fn get(&self, key: &[u8]) -> Option<io::Result<&[u8]>>
+    pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<io::Result<&'a[u8]>>
     {
         self.lookup(key).nth(0)
     }
