@@ -25,13 +25,10 @@ impl Reader {
         obj.init(|| Reader { inner: reader })
     }
 
-    fn get_all(&self, key: &PyBytes) -> PyResult<LookupIter> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        Ok(LookupIter{reader: self.to_object(py).extract(py)?,
-                      key: key.into(),
-                      state: LookupState::new(&self.inner, key.as_bytes())})
+    fn get_all(&self, key: &PyBytes) -> LookupIter {
+        LookupIter{reader: self.into(),
+                   key: key.into(),
+                   state: LookupState::new(&self.inner, key.as_bytes())}
     }
 }
 
@@ -106,10 +103,7 @@ impl PyIterProtocol for LookupIter {
 impl PyIterProtocol for Reader
 {
     fn __iter__(&mut self) -> PyResult<FileIter> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        Ok(FileIter{reader: self.to_object(py).extract(py)?, state: Default::default() })
+        Ok(FileIter{reader: self.into(), state: Default::default() })
     }
 }
 
