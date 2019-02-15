@@ -8,14 +8,25 @@ use super::*;
 use byteorder::{ReadBytesExt, LE};
 
 pub trait CDBAccess: Deref<Target=[u8]> {
-    fn read_pair(&self, pos: usize) -> io::Result<(usize, usize)> {
+    #[inline]
+    fn read_pair(&self, pos: usize) -> io::Result<(u32, u32)> {
         let data = self.get_data(pos, PAIR_SIZE)?;
         let mut cur = Cursor::new(data);
 
         Ok((
-            cur.read_u32::<LE>()? as usize,
-            cur.read_u32::<LE>()? as usize,
+            cur.read_u32::<LE>()?,
+            cur.read_u32::<LE>()?,
         ))
+    }
+
+    fn read_hash_pos(&self, pos: usize) -> io::Result<(CDBHash, usize)> {
+        let (hash, pos) = self.read_pair(pos)?;
+        Ok((CDBHash(hash), pos as usize))
+    }
+
+    fn read_value_length(&self, pos: usize) -> io::Result<(usize, usize)> {
+        let (klen, vlen) = self.read_pair(pos)?;
+        Ok((klen as usize, vlen as usize))
     }
 
     fn read_header(&self) -> io::Result<[PosLen; ENTRIES]> {
@@ -166,7 +177,7 @@ impl LookupState {
         while let Some(tableidx) = self.iter.next() {
             let pos = self.table_pos + tableidx * PAIR_SIZE;
 
-            let (hash, ptr) = match cdb.access.read_pair(pos) {
+            let (hash, ptr) = match cdb.access.read_hash_pos(pos) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -178,11 +189,11 @@ impl LookupState {
                 return None;
             }
 
-            if hash != self.khash.0 as usize {
+            if hash != self.khash {
                 continue;
             }
 
-            let (k, v, _) = match cdb.get_data(ptr as usize) {
+            let (k, v, _) = match cdb.get_data(ptr) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -207,7 +218,7 @@ impl<A: CDBAccess> CDBReader<A> {
     }
 
     fn get_data(&self, pos: usize) -> io::Result<KeyValueNext<'_>> {
-        let (klen, vlen) = self.access.read_pair(pos)?;
+        let (klen, vlen) = self.access.read_value_length(pos)?;
 
         let keystart = pos + PAIR_SIZE;
         let keyend = keystart + klen;

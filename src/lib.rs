@@ -24,8 +24,8 @@ impl PosLen {
     }
 }
 
-#[derive(Copy, Clone)]
-struct CDBHash(u32);
+#[derive(Copy, Clone, PartialEq)]
+pub struct CDBHash(pub u32);
 
 impl CDBHash {
     fn new(d: &[u8]) -> Self {
