@@ -25,11 +25,13 @@ impl Reader {
         obj.init(|| Reader { inner: reader })
     }
 
-    fn get_all(&self, key: &PyBytes) -> LookupIter {
+    fn get_all(&self, key: &PyBytes) -> PyResult<LookupIter> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        LookupIter{reader: self.into_object(py), key: key.into(), state: LookupState::new(&self.inner, key.as_bytes())}
+        Ok(LookupIter{reader: self.to_object(py).extract(py)?,
+                      key: key.into(),
+                      state: LookupState::new(&self.inner, key.as_bytes())})
     }
 }
 
@@ -38,9 +40,8 @@ impl PyMappingProtocol for Reader {
     fn __getitem__(&self, key: &PyBytes) -> PyResult<PyObject> {
         let gil = Python::acquire_gil();
         let py = gil.python();
-        let key_bytes = key.as_bytes();
 
-        match self.inner.get(key_bytes) {
+        match self.inner.get(key.as_bytes()) {
             Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
             Some(Err(e)) => Err(e.into()),
             None => Err(PyErr::new::<exc::KeyError, _>(key.to_object(py))),
@@ -51,7 +52,7 @@ impl PyMappingProtocol for Reader {
 
 #[pyclass]
 pub struct FileIter {
-    reader: PyObject,
+    reader: Py<Reader>,
     state: IterState,
 }
 
@@ -65,9 +66,7 @@ impl PyIterProtocol for FileIter {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let reader : &Reader = self.reader.cast_as(py)?;
-
-        match self.state.next(&reader.inner) {
+        match self.state.next(&self.reader.as_ref(py).inner) {
             Some(Ok((k, v))) => {
                 Ok(Some((PyBytes::new(py, k), PyBytes::new(py, v)).into_tuple(py).into()))
             }
@@ -78,8 +77,8 @@ impl PyIterProtocol for FileIter {
 }
 #[pyclass]
 struct LookupIter {
-    reader: PyObject,
-    key: PyObject,
+    reader: Py<Reader>,
+    key: Py<PyBytes>,
     state: LookupState,
 }
 
@@ -93,10 +92,7 @@ impl PyIterProtocol for LookupIter {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let reader : &Reader = self.reader.cast_as(py)?;
-        let key_pybytes : &PyBytes = self.key.cast_as(py)?;
-
-        match self.state.next(&reader.inner, key_pybytes.as_bytes()) {
+        match self.state.next(&self.reader.as_ref(py).inner, self.key.as_ref(py).as_bytes()) {
             Some(Ok(v)) => {
                 Ok(Some(PyBytes::new(py, v).into()))
             }
@@ -113,7 +109,7 @@ impl PyIterProtocol for Reader
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        Ok(FileIter{reader: self.to_object(py), state: Default::default() })
+        Ok(FileIter{reader: self.to_object(py).extract(py)?, state: Default::default() })
     }
 }
 
