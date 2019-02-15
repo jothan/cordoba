@@ -50,7 +50,7 @@ fn cmd_dump(matches: &ArgMatches) -> std::io::Result<()> {
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
 
-    for res in reader.iter() {
+    for res in &reader {
         let (k, v) = res?;
         handle.write_all(&k)?;
         handle.write_all(b" = ")?;

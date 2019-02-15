@@ -67,7 +67,7 @@ impl Default for IterState {
 }
 
 #[derive(Clone)]
-struct FileIter<'a, A>
+pub struct FileIter<'a, A>
 {
     cdb: &'a CDBReader<A>,
     state: IterState,
@@ -233,5 +233,15 @@ impl<A: CDBAccess> CDBReader<A> {
     pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<io::Result<&'a[u8]>>
     {
         self.lookup(key).nth(0)
+    }
+}
+
+impl <'a, A: CDBAccess> IntoIterator for &'a CDBReader<A> {
+    type IntoIter = FileIter<'a, A>;
+    type Item = <FileIter<'a, A> as Iterator>::Item;
+
+    fn into_iter(self) -> FileIter<'a, A>
+    {
+        FileIter{cdb: self, state: Default::default()}
     }
 }
