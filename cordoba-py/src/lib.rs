@@ -160,19 +160,25 @@ impl Writer {
         obj.init(|| Writer { inner: Some(writer) })
     }
 
-    fn write(&mut self, key: &PyBytes, value: &PyBytes, py: Python) -> PyResult<()> {
-        match &mut self.inner {
-            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(|e| e.into()),
-            None => Err(PyErr::new::<exc::ValueError, _>("Writer is closed".into_object(py)))
-        }
-    }
-
     fn close(&mut self, py: Python) -> PyResult<()>{
         let writer = self.inner.take()
                          .ok_or_else(|| PyErr::new::<exc::ValueError, _>("Writer is closed".into_object(py)))?;
 
         writer.finish()?;
         Ok(())
+    }
+}
+
+#[pyproto]
+impl PyMappingProtocol for Writer {
+    fn __setitem__(&mut self, key: &PyBytes, value: &PyBytes) -> PyResult<()> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        match &mut self.inner {
+            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(|e| e.into()),
+            None => Err(PyErr::new::<exc::ValueError, _>("Writer is closed".into_object(py)))
+        }
     }
 }
 
