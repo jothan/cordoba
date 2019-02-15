@@ -8,9 +8,6 @@ edition = "2018"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[profile.release]
-panic = "abort"
-
 [dependencies]
 memmap = { version="0.7.0" }
 cordoba = { path = ".." }

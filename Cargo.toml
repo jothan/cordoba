@@ -31,3 +31,6 @@ required-features = ["build-binary"]
 [[bin]]
 name = "cdbwrite"
 required-features = ["build-binary"]
+
+[workspace]
+members = ["cordoba-py"]
