@@ -1,14 +1,16 @@
 use std::fs::File;
+use std::io;
+use std::io::{ErrorKind, Write, Seek};
 
 use memmap::Mmap;
 
 use pyo3::prelude::*;
 use pyo3::{IntoPyTuple};
 use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
-use pyo3::types::{PyBytes};
+use pyo3::types::PyBytes;
 use pyo3::types::exceptions as exc;
 
-use cordoba::{CDBReader, IterState, LookupState};
+use cordoba::{CDBReader, CDBWriter, IterState, LookupState};
 
 #[pyclass]
 pub struct Reader {
@@ -107,9 +109,77 @@ impl PyIterProtocol for Reader
     }
 }
 
+
+#[pyclass]
+pub struct Writer {
+    inner: Option<CDBWriter<PyFile>>,
+}
+
+struct PyFile(PyObject);
+
+impl Write for PyFile {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        self.0.call_method1(py, "write", (PyBytes::new(py, data),))?;
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        self.0.call_method0(py, "flush")?;
+        Ok(())
+    }
+}
+
+impl Seek for PyFile {
+    fn seek(&mut self, from: io::SeekFrom) -> io::Result<u64> {
+        let (rel, pos) = match from {
+            io::SeekFrom::Start(pos) => (0, pos as i64), // FIXME: Add proper check here.
+            io::SeekFrom::Current(pos) => (1, pos),
+            io::SeekFrom::End(pos) => (2, pos),
+        };
+
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        let cur_pos = self.0.call_method1(py, "seek", (pos, rel))?;
+        let res : u64 = cur_pos.extract(py).map_err(|_| ErrorKind::InvalidData)?;
+        Ok(res)
+    }
+}
+
+#[pymethods]
+impl Writer {
+    #[new]
+    fn __new__(obj: &PyRawObject, file: PyObject) -> PyResult<()> {
+        let writer = CDBWriter::new(PyFile(file))?;
+        obj.init(|| Writer { inner: Some(writer) })
+    }
+
+    fn write(&mut self, key: &PyBytes, value: &PyBytes, py: Python) -> PyResult<()> {
+        match &mut self.inner {
+            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(|e| e.into()),
+            None => Err(PyErr::new::<exc::ValueError, _>("Writer is closed".into_object(py)))
+        }
+    }
+
+    fn close(&mut self, py: Python) -> PyResult<()>{
+        let writer = self.inner.take()
+                         .ok_or_else(|| PyErr::new::<exc::ValueError, _>("Writer is closed".into_object(py)))?;
+
+        writer.finish()?;
+        Ok(())
+    }
+}
+
 #[pymodule]
 fn cordoba(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Reader>()?;
+    m.add_class::<Writer>()?;
     m.add_class::<FileIter>()?;
     m.add_class::<LookupIter>()?;
 
