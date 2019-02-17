@@ -58,10 +58,7 @@ pub trait CDBAccess: Deref<Target=[u8]> {
     }
 }
 
-use memmap::Mmap;
-impl CDBAccess for Mmap {}
-impl CDBAccess for Vec<u8> {}
-impl CDBAccess for &[u8] {}
+impl <T: Deref<Target=[u8]>> CDBAccess for T {}
 
 pub struct CDBReader<A> {
     access: A,
