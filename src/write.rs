@@ -1,3 +1,4 @@
+use std::mem;
 use std::collections::BTreeSet;
 use std::io::{Seek, SeekFrom, Write};
 
@@ -7,6 +8,14 @@ use super::*;
 
 #[derive(Copy, Clone, Debug)]
 struct HashPos(CDBHash, u32);
+
+impl HashPos {
+    #[inline]
+    fn distance(&self, tlen: usize, pos: usize) -> usize {
+        let startslot = self.0.slot(tlen);
+        pos.checked_sub(startslot).unwrap_or_else(|| pos + tlen - startslot)
+    }
+}
 
 const FILLFACTOR: usize = 2;
 
@@ -106,6 +115,10 @@ where
         self.finish_generic(fill_table_btree)
     }
 
+    pub fn finish_robinhood(self) -> Result<(), std::io::Error> {
+        self.finish_generic(fill_table_robinhood)
+    }
+
     pub fn into_file(self) -> T {
         self.file
     }
@@ -151,5 +164,28 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
 
         debug_assert_eq!(output[idx].1, 0);
         output[idx] = *hp;
+    }
+}
+
+fn fill_table_robinhood(input: &[HashPos], output: &mut Vec<HashPos>) {
+    let tlen = input.len() * FILLFACTOR;
+    output.clear();
+    output.resize(tlen, HashPos(CDBHash(0), 0));
+
+    for mut hp in input.iter().cloned() {
+        let startslot = hp.0.slot(tlen);
+        let (left, right) = output.split_at_mut(startslot);
+
+        for (nb_probe, slot) in right.iter_mut().chain(left.iter_mut()).enumerate() {
+            let slotnum = (startslot + nb_probe) % tlen;
+            if slot.1 == 0 {
+                *slot = hp;
+                break;
+            } else {
+                if slot.distance(tlen, slotnum) < nb_probe {
+                    mem::swap(slot, &mut hp);
+                }
+            }
+        }
     }
 }
