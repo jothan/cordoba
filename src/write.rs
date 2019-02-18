@@ -106,8 +106,12 @@ where
         self.finish_generic(fill_table_btree)
     }
 
-    pub fn get_file(self) -> T {
+    pub fn into_file(self) -> T {
         self.file
+    }
+
+    pub fn get_file(&self) -> &T {
+        &self.file
     }
 }
 

@@ -7,6 +7,7 @@ use memmap::Mmap;
 use pyo3::prelude::*;
 use pyo3::{IntoPyTuple};
 use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
+use pyo3::{PyVisit, PyTraverseError, PyGCProtocol};
 use pyo3::types::PyBytes;
 use pyo3::types::exceptions as exc;
 
@@ -74,6 +75,7 @@ impl PyIterProtocol for FileIter {
         }
     }
 }
+
 #[pyclass]
 struct LookupIter {
     reader: Py<Reader>,
@@ -110,7 +112,7 @@ impl PyIterProtocol for Reader
 }
 
 
-#[pyclass]
+#[pyclass(gc)]
 pub struct Writer {
     inner: Option<CDBWriter<PyFile>>,
 }
@@ -183,6 +185,20 @@ impl PyMappingProtocol for Writer {
             Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(|e| e.into()),
             None => Err(Self::closed_exc())
         }
+    }
+}
+
+#[pyproto]
+impl PyGCProtocol for Writer {
+    fn __traverse__(&self, visit: PyVisit) -> Result<(), PyTraverseError> {
+        if let Some(ref writer) = self.inner {
+            visit.call(&writer.get_file().0)?
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.inner.take();
     }
 }
 
