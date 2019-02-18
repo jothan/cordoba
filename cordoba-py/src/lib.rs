@@ -1,3 +1,4 @@
+#![feature(specialization)]
 use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Write, Seek};
@@ -5,10 +6,10 @@ use std::io::{ErrorKind, Write, Seek};
 use memmap::Mmap;
 
 use pyo3::prelude::*;
-use pyo3::{IntoPyTuple};
-use pyo3::{PyIterProtocol, PyMappingProtocol, PyRawObject};
-use pyo3::{PyVisit, PyTraverseError, PyGCProtocol};
-use pyo3::types::PyBytes;
+use pyo3::{IntoPyTuple, PyRawObject};
+use pyo3::{PyIterProtocol, PyMappingProtocol, PyContextProtocol};
+use pyo3::{PyGCProtocol, PyVisit, PyTraverseError};
+use pyo3::types::{PyBytes, PyType, PyObjectRef};
 use pyo3::types::exceptions as exc;
 
 use cordoba::{CDBReader, CDBWriter, IterState, LookupState};
@@ -199,6 +200,24 @@ impl PyGCProtocol for Writer {
 
     fn __clear__(&mut self) {
         self.inner.take();
+    }
+}
+
+#[pyproto]
+impl<'p> PyContextProtocol<'p> for Writer {
+    fn __enter__(&mut self) -> PyResult<PyObject> {
+        Ok(self.into())
+    }
+
+    fn __exit__(&mut self,
+                ty: Option<&'p PyType>,
+                _value: Option<&'p PyObjectRef>,
+                _traceback: Option<&'p PyObjectRef>,
+    ) -> PyResult<bool> {
+        if ty.is_none() {
+            self.close()?;
+        }
+        Ok(false)
     }
 }
 
