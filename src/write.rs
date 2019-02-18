@@ -104,7 +104,7 @@ where
     }
 
     pub fn finish(self) -> Result<(), std::io::Error> {
-        self.finish_btree()
+        self.finish_robinhood()
     }
 
     pub fn finish_naive(self) -> Result<(), std::io::Error> {
