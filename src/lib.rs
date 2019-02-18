@@ -20,7 +20,13 @@ pub struct PosLen {
 
 impl PosLen {
     fn valid(&self, datalen: usize) -> bool {
-        (self.pos + self.len) <= datalen
+        let data_sz = self.len.checked_mul(PAIR_SIZE);
+        let data_end = data_sz.and_then(|sz| sz.checked_add(self.pos));
+
+        match data_end {
+            None => false,
+            Some(end) => end <= datalen
+        }
     }
 }
 
