@@ -175,17 +175,21 @@ fn fill_table_robinhood(input: &[HashPos], output: &mut Vec<HashPos>) {
     for mut hp in input.iter().cloned() {
         let startslot = hp.0.slot(tlen);
         let (left, right) = output.split_at_mut(startslot);
+        let mut slotnum = startslot;
+        let mut distance = 0;
 
-        for (nb_probe, slot) in right.iter_mut().chain(left.iter_mut()).enumerate() {
-            let slotnum = (startslot + nb_probe) % tlen;
+        for slot in right.iter_mut().chain(left.iter_mut()) {
             if slot.1 == 0 {
                 *slot = hp;
                 break;
             } else {
-                if slot.distance(tlen, slotnum) < nb_probe {
+                if slot.distance(tlen, slotnum) < distance {
                     mem::swap(slot, &mut hp);
+                    distance = hp.distance(tlen, slotnum);
                 }
             }
+            distance += 1;
+            slotnum = (slotnum + 1) % tlen;
         }
     }
 }
