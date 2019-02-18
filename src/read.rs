@@ -32,6 +32,7 @@ pub trait CDBAccess: Deref<Target=[u8]> {
     fn read_header(&self) -> io::Result<[PosLen; ENTRIES]> {
         let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
         let mut cur = Cursor::new(self.get_data(0, PAIR_SIZE * ENTRIES)?);
+        let mut empty = true;
 
         for table in tables.iter_mut() {
             let (pos, len) = (
@@ -46,8 +47,16 @@ pub trait CDBAccess: Deref<Target=[u8]> {
                     "a hash table is beyond the end of this file",
                 ));
             }
+            if table.len != 0 {
+                empty = false;
+            }
         }
-        Ok(tables)
+
+        if empty {
+            Err(io::Error::new(ErrorKind::InvalidData, "No hash tables present."))
+        } else {
+            Ok(tables)
+        }
     }
 
     fn get_data(&self, pos: usize, len: usize) -> io::Result<&[u8]> {
