@@ -125,8 +125,9 @@ impl Write for PyFile {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        self.0.call_method1(py, "write", (PyBytes::new(py, data),))?;
-        Ok(data.len())
+        let written = self.0.call_method1(py, "write", (PyBytes::new(py, data),))?;
+        let res: usize = written.extract(py).map_err(|_| ErrorKind::InvalidData)?;
+        Ok(res)
     }
 
     fn flush(&mut self) -> io::Result<()> {
