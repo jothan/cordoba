@@ -5,7 +5,7 @@ use byteorder::{WriteBytesExt, LE};
 
 use super::*;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 struct HashPos(CDBHash, u32);
 
 const FILLFACTOR: usize = 2;
@@ -72,7 +72,7 @@ where
 
     fn finish_generic<F>(mut self, fill: F) -> Result<(), std::io::Error>
     where
-        F: Fn(&[HashPos], &mut Vec<(u32, u32)>),
+        F: Fn(&[HashPos], &mut Vec<HashPos>),
     {
         let mut tout = Vec::new();
 
@@ -83,8 +83,8 @@ where
                 len: tout.len(),
             };
             for row in &tout {
-                self.file.write_u32::<LE>(row.0 as u32)?;
-                self.file.write_u32::<LE>(row.1 as u32)?;
+                self.file.write_u32::<LE>(row.0.into())?;
+                self.file.write_u32::<LE>(row.1)?;
             }
             self.pos += (PAIR_SIZE * tout.len()) as u64;
         }
@@ -115,28 +115,28 @@ where
     }
 }
 
-fn fill_table_naive(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
+fn fill_table_naive(input: &[HashPos], output: &mut Vec<HashPos>) {
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, (0, 0));
+    output.resize(tlen, HashPos(CDBHash(0), 0));
 
     for hp in input {
         let (left, right) = output.split_at_mut(hp.0.slot(tlen));
 
         for slot in right.iter_mut().chain(left.iter_mut()) {
             if slot.1 == 0 {
-                *slot = (u32::from(&hp.0), hp.1);
+                *slot = *hp;
                 break;
             }
         }
     }
 }
 
-fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
+fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
     let mut cache = BTreeSet::new();
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, (0, 0));
+    output.resize(tlen, HashPos(CDBHash(0), 0));
 
     cache.extend(0..tlen);
 
@@ -150,6 +150,6 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<(u32, u32)>) {
         cache.take(&idx);
 
         debug_assert_eq!(output[idx].1, 0);
-        output[idx] = (u32::from(&hp.0), hp.1);
+        output[idx] = *hp;
     }
 }
