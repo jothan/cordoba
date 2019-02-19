@@ -1,4 +1,5 @@
-#![feature(specialization)]
+#![feature(specialization, try_from)]
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Write, Seek};
@@ -141,16 +142,18 @@ impl Write for PyFile {
 
 impl Seek for PyFile {
     fn seek(&mut self, from: io::SeekFrom) -> io::Result<u64> {
-        let (rel, pos) = match from {
-            io::SeekFrom::Start(pos) => (0, pos as i64), // FIXME: Add proper check here.
-            io::SeekFrom::Current(pos) => (1, pos),
-            io::SeekFrom::End(pos) => (2, pos),
+        let seek_args = match from {
+            io::SeekFrom::Start(pos) => {
+                (i64::try_from(pos).map_err(|_| ErrorKind::InvalidData)?, 0)
+            }
+            io::SeekFrom::Current(pos) => (pos, 1),
+            io::SeekFrom::End(pos) => (pos, 2),
         };
 
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let cur_pos = self.0.call_method1(py, "seek", (pos, rel))?;
+        let cur_pos = self.0.call_method1(py, "seek", seek_args)?;
         let res : u64 = cur_pos.extract(py).map_err(|_| ErrorKind::InvalidData)?;
         Ok(res)
     }
