@@ -54,7 +54,7 @@ impl std::fmt::Debug for CDBHash {
     }
 }
 
-impl<'a> From<CDBHash> for u32 {
+impl From<CDBHash> for u32 {
     fn from(h: CDBHash) -> Self {
         h.0
     }
