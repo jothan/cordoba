@@ -23,8 +23,9 @@ pub struct Reader {
 #[pymethods]
 impl Reader {
     #[new]
-    fn __new__(obj: &PyRawObject, fname: &str) -> PyResult<()> {
-        let file = File::open(fname)?;
+    fn __new__(obj: &PyRawObject, fname: PyObject, py: Python) -> PyResult<()> {
+        let path : &str = py.import("os")?.call1("fsdecode", (fname,))?.extract()?;
+        let file = File::open(path)?;
         let map = unsafe { Mmap::map(&file) }?;
         let reader = CDBReader::new(map)?;
         obj.init(|| Reader { inner: reader })
