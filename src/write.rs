@@ -2,8 +2,6 @@ use std::mem;
 use std::collections::BTreeSet;
 use std::io::{Seek, SeekFrom, Write};
 
-use byteorder::{WriteBytesExt, LE};
-
 use super::*;
 
 #[derive(Copy, Clone, Debug)]
@@ -47,8 +45,8 @@ where
     }
 
     fn write_kv(&mut self, k: &[u8], v: &[u8]) -> Result<(), std::io::Error> {
-        self.file.write_u32::<LE>(k.len() as u32)?;
-        self.file.write_u32::<LE>(v.len() as u32)?;
+        self.file.write_all(&(k.len() as u32).to_le_bytes())?;
+        self.file.write_all(&(v.len() as u32).to_le_bytes())?;
         self.file.write_all(k)?;
         self.file.write_all(v)?;
 
@@ -72,8 +70,8 @@ where
         self.file.seek(SeekFrom::Start(0))?;
 
         for header in self.header.iter() {
-            self.file.write_u32::<LE>(header.pos as u32)?;
-            self.file.write_u32::<LE>(header.len as u32)?;
+            self.file.write_all(&(header.pos as u32).to_le_bytes())?;
+            self.file.write_all(&(header.len as u32).to_le_bytes())?;
         }
 
         Ok(())
@@ -92,8 +90,9 @@ where
                 len: tout.len(),
             };
             for row in &tout {
-                self.file.write_u32::<LE>(row.0.into())?;
-                self.file.write_u32::<LE>(row.1)?;
+                let hash : u32 = row.0.into();
+                self.file.write_all(&hash.to_le_bytes())?;
+                self.file.write_all(&row.1.to_le_bytes())?;
             }
             self.pos += (PAIR_SIZE * tout.len()) as u64;
         }
