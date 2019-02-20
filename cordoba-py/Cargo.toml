@@ -10,9 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 memmap = { version="0.7.0" }
-cordoba = { path = ".." }
+cordoba = { path = "..", features=["python"] }
 
 [dependencies.pyo3]
 version = "0.6.0-alpha.2"
 features = ["extension-module"]
-

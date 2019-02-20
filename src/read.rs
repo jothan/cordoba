@@ -1,66 +1,65 @@
-use std::io;
-use std::io::{Cursor, ErrorKind};
-use std::iter::Chain;
-use std::ops::Range;
+use core::convert::TryInto;
+use core::iter::Chain;
+use core::ops::Range;
 
 use super::*;
-use byteorder::{ReadBytesExt, LE};
+
+#[derive(Debug)]
+pub enum CDBReadError {
+    OutOfBounds,
+    InvalidFile,
+}
+
+type CDBResult<T> = Result<T, CDBReadError>;
 
 pub trait CDBAccess: AsRef<[u8]> {
     #[inline]
-    fn read_pair(&self, pos: usize) -> io::Result<(u32, u32)> {
+    fn read_pair(&self, pos: usize) -> CDBResult<(u32, u32)> {
         let data = self.get_data(pos, PAIR_SIZE)?;
-        let mut cur = Cursor::new(data);
-
         Ok((
-            cur.read_u32::<LE>()?,
-            cur.read_u32::<LE>()?,
+            u32::from_le_bytes(data[0..4].try_into().unwrap()),
+            u32::from_le_bytes(data[4..8].try_into().unwrap())
         ))
     }
 
-    fn read_hash_pos(&self, pos: usize) -> io::Result<(CDBHash, usize)> {
+    fn read_hash_pos(&self, pos: usize) -> CDBResult<(CDBHash, usize)> {
         let (hash, pos) = self.read_pair(pos)?;
         Ok((CDBHash(hash), pos as usize))
     }
 
-    fn read_value_length(&self, pos: usize) -> io::Result<(usize, usize)> {
+    fn read_value_length(&self, pos: usize) -> CDBResult<(usize, usize)> {
         let (klen, vlen) = self.read_pair(pos)?;
         Ok((klen as usize, vlen as usize))
     }
 
-    fn read_header(&self) -> io::Result<[PosLen; ENTRIES]> {
+    fn read_header(&self) -> CDBResult<[PosLen; ENTRIES]> {
         let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
-        let mut cur = Cursor::new(self.get_data(0, PAIR_SIZE * ENTRIES)?);
+        let header = self.get_data(0, PAIR_SIZE * ENTRIES)?;
+        let mut header_chunks = header.chunks_exact(core::mem::size_of::<u32>());
         let mut empty = true;
 
         for table in tables.iter_mut() {
-            let (pos, len) = (
-                cur.read_u32::<LE>()? as usize,
-                cur.read_u32::<LE>()? as usize,
+            *table = PosLen {
+                pos: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
+                len: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
             );
 
-            *table = PosLen { pos, len };
             if !table.valid(self.as_ref().len()) {
-                return Err(io::Error::new(
-                    ErrorKind::InvalidData,
-                    "a hash table is beyond the end of this file",
-                ));
+                return Err(CDBReadError::InvalidFile);
             }
-            if table.len != 0 {
-                empty = false;
-            }
+            empty &= table.len == 0;
         }
 
         if empty {
-            Err(io::Error::new(ErrorKind::InvalidData, "No hash tables present."))
+            Err(CDBReadError::InvalidFile)
         } else {
             Ok(tables)
         }
     }
 
-    fn get_data(&self, pos: usize, len: usize) -> io::Result<&[u8]> {
+    fn get_data(&self, pos: usize, len: usize) -> CDBResult<&[u8]> {
         let res = self.as_ref().get(pos..pos + len).ok_or_else(|| {
-            io::Error::new(ErrorKind::UnexpectedEof, "tried to read beyond buffer")
+            CDBReadError::OutOfBounds
         })?;
         Ok(res)
     }
@@ -92,7 +91,7 @@ pub struct FileIter<'a, A>
 impl IterState
 {
     #[inline]
-    pub fn next<'c, A: CDBAccess>(&mut self, cdb: &'c CDBReader<A>) -> Option<io::Result<(&'c [u8], &'c [u8])>> {
+    pub fn next<'c, A: CDBAccess>(&mut self, cdb: &'c CDBReader<A>) -> Option<CDBResult<(&'c [u8], &'c [u8])>> {
         if self.0 < cdb.tables[0].pos {
             match cdb.get_data(self.0) {
                 Ok((k, v, newpos)) => {
@@ -111,7 +110,7 @@ impl IterState
 }
 
 impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
-    type Item = io::Result<(&'a [u8], &'a [u8])>;
+    type Item = CDBResult<(&'a [u8], &'a [u8])>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.state.next(self.cdb)
@@ -137,7 +136,7 @@ impl <'c, A> LookupIter<'c, A> {
 }
 
 impl <'c, A: CDBAccess> Iterator for LookupIter<'c, A> {
-    type Item = io::Result<&'c [u8]>;
+    type Item = CDBResult<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.state.next(self.cdb, self.key)
@@ -174,7 +173,7 @@ impl LookupState {
     }
 
     #[inline]
-    pub fn next<'a, A: CDBAccess>(&mut self, cdb: &'a CDBReader<A>, key: &[u8]) -> Option<io::Result<&'a [u8]>> {
+    pub fn next<'a, A: CDBAccess>(&mut self, cdb: &'a CDBReader<A>, key: &[u8]) -> Option<CDBResult<&'a [u8]>> {
         if self.done {
             return None;
         }
@@ -217,12 +216,12 @@ impl LookupState {
 type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
 impl<A: CDBAccess> CDBReader<A> {
-    pub fn new(access: A) -> io::Result<CDBReader<A>> {
+    pub fn new(access: A) -> CDBResult<CDBReader<A>> {
         let tables = access.read_header()?;
         Ok(CDBReader { access, tables })
     }
 
-    fn get_data(&self, pos: usize) -> io::Result<KeyValueNext<'_>> {
+    fn get_data(&self, pos: usize) -> CDBResult<KeyValueNext<'_>> {
         let (klen, vlen) = self.access.read_value_length(pos)?;
 
         let keystart = pos + PAIR_SIZE;
@@ -236,17 +235,17 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=io::Result<(&'_ [u8], &'_ [u8])>>
+    pub fn iter(&self) -> impl Iterator<Item=CDBResult<(&'_ [u8], &'_ [u8])>>
     {
         FileIter{cdb: self, state: Default::default()}
     }
 
-    pub fn lookup<'a>(&'a self, key: &'a [u8]) -> impl Iterator<Item=io::Result<&'_ [u8]>>
+    pub fn lookup<'a>(&'a self, key: &'a [u8]) -> impl Iterator<Item=CDBResult<&'_ [u8]>>
     {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<io::Result<&'a[u8]>>
+    pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>
     {
         self.lookup(key).nth(0)
     }
@@ -259,5 +258,25 @@ impl <'a, A: CDBAccess> IntoIterator for &'a CDBReader<A> {
     fn into_iter(self) -> FileIter<'a, A>
     {
         FileIter{cdb: self, state: Default::default()}
+    }
+}
+
+#[cfg(feature = "python")]
+impl core::convert::From<CDBReadError> for pyo3::PyErr {
+    fn from(error: CDBReadError) -> Self {
+        match error {
+            CDBReadError::OutOfBounds => pyo3::exceptions::EOFError::py_err("Tried to read beyond end of file."),
+            CDBReadError::InvalidFile => pyo3::exceptions::IOError::py_err("Invalid file data."),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::convert::From<CDBReadError> for std::io::Error {
+    fn from(error: CDBReadError) -> Self {
+        match error {
+            CDBReadError::OutOfBounds => std::io::ErrorKind::UnexpectedEof,
+            CDBReadError::InvalidFile => std::io::ErrorKind::InvalidData,
+        }.into()
     }
 }

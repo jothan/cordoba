@@ -1,11 +1,14 @@
-use byteorder;
+#![cfg_attr(not(feature="std"), no_std)]
+#![feature(try_from)]
 
 mod read;
-mod write;
 
+#[cfg(feature = "std")]
+mod write;
+#[cfg(feature = "std")]
+pub use self::write::CDBWriter;
 
 pub use self::read::*;
-pub use self::write::CDBWriter;
 
 const ENTRIES: usize = 256;
 const PAIR_SIZE: usize = 8;
@@ -48,8 +51,8 @@ impl CDBHash {
     }
 }
 
-impl std::fmt::Debug for CDBHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for CDBHash {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "CDBHash(0x{:08x})", self.0)
     }
 }

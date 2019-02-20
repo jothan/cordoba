@@ -10,7 +10,7 @@ fn cdb_open(fname: &str) -> std::io::Result<CDBReader<Mmap>>
 {
     let f = File::open(fname)?;
     let map = unsafe { Mmap::map(&f) }?;
-    CDBReader::new(map)
+    Ok(CDBReader::new(map)?)
 }
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
