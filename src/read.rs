@@ -2,12 +2,11 @@ use std::io;
 use std::io::{Cursor, ErrorKind};
 use std::iter::Chain;
 use std::ops::Range;
-use core::ops::Deref;
 
 use super::*;
 use byteorder::{ReadBytesExt, LE};
 
-pub trait CDBAccess: Deref<Target=[u8]> {
+pub trait CDBAccess: AsRef<[u8]> {
     #[inline]
     fn read_pair(&self, pos: usize) -> io::Result<(u32, u32)> {
         let data = self.get_data(pos, PAIR_SIZE)?;
@@ -41,7 +40,7 @@ pub trait CDBAccess: Deref<Target=[u8]> {
             );
 
             *table = PosLen { pos, len };
-            if !table.valid(self.len()) {
+            if !table.valid(self.as_ref().len()) {
                 return Err(io::Error::new(
                     ErrorKind::InvalidData,
                     "a hash table is beyond the end of this file",
@@ -60,14 +59,14 @@ pub trait CDBAccess: Deref<Target=[u8]> {
     }
 
     fn get_data(&self, pos: usize, len: usize) -> io::Result<&[u8]> {
-        let res = self.get(pos..pos + len).ok_or_else(|| {
+        let res = self.as_ref().get(pos..pos + len).ok_or_else(|| {
             io::Error::new(ErrorKind::UnexpectedEof, "tried to read beyond buffer")
         })?;
         Ok(res)
     }
 }
 
-impl <T: Deref<Target=[u8]>> CDBAccess for T {}
+impl <T: AsRef<[u8]>> CDBAccess for T {}
 
 pub struct CDBReader<A> {
     access: A,
