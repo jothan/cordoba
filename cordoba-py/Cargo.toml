@@ -1,7 +1,7 @@
 [package]
 name = "cordoba-py"
 description = "Cordoba Python interface"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Jonathan Bastien-Filiatrault <joe@x2a.org>"]
 edition = "2018"
 
@@ -13,5 +13,5 @@ memmap = { version="0.7.0" }
 cordoba = { path = "..", features=["python"] }
 
 [dependencies.pyo3]
-version = "0.6.0-alpha.2"
+version = "0.6.0-alpha"
 features = ["extension-module"]
