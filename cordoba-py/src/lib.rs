@@ -169,8 +169,7 @@ impl Writer {
     }
 
     fn close(&mut self) -> PyResult<()> {
-        let writer = self.inner.take()
-                         .ok_or_else(|| Self::closed_exc())?;
+        let writer = self.inner.take().ok_or_else(Self::closed_exc)?;
 
         writer.finish()?;
         Ok(())
@@ -188,7 +187,7 @@ impl Writer {
 impl PyMappingProtocol for Writer {
     fn __setitem__(&mut self, key: &PyBytes, value: &PyBytes) -> PyResult<()> {
         match &mut self.inner {
-            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(|e| e.into()),
+            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(Into::into),
             None => Err(Self::closed_exc())
         }
     }

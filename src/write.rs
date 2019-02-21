@@ -9,7 +9,7 @@ struct HashPos(CDBHash, u32);
 
 impl HashPos {
     #[inline]
-    fn distance(&self, tlen: usize, pos: usize) -> usize {
+    fn distance(self, tlen: usize, pos: usize) -> usize {
         let startslot = self.0.slot(tlen);
         pos.checked_sub(startslot).unwrap_or_else(|| pos + tlen - startslot)
     }
@@ -181,11 +181,9 @@ fn fill_table_robinhood(input: &[HashPos], output: &mut Vec<HashPos>) {
             if slot.1 == 0 {
                 *slot = hp;
                 break;
-            } else {
-                if slot.distance(tlen, slotnum) < distance {
-                    mem::swap(slot, &mut hp);
-                    distance = hp.distance(tlen, slotnum);
-                }
+            } else if slot.distance(tlen, slotnum) < distance {
+                mem::swap(slot, &mut hp);
+                distance = hp.distance(tlen, slotnum);
             }
             distance += 1;
             slotnum = (slotnum + 1) % tlen;

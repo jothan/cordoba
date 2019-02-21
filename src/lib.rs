@@ -42,11 +42,13 @@ impl CDBHash {
         CDBHash(h)
     }
 
-    fn table(&self) -> usize {
+    #[inline]
+    fn table(self) -> usize {
         self.0 as usize % ENTRIES
     }
 
-    fn slot(&self, tlen: usize) -> usize {
+    #[inline]
+    fn slot(self, tlen: usize) -> usize {
         (self.0 as usize >> 8) % tlen
     }
 }
