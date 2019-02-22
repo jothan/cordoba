@@ -11,60 +11,7 @@ pub enum CDBReadError {
 }
 
 type CDBResult<T> = Result<T, CDBReadError>;
-
-pub trait CDBAccess: AsRef<[u8]> {
-    #[inline]
-    fn read_pair(&self, pos: usize) -> CDBResult<(u32, u32)> {
-        let data = self.get_data(pos, PAIR_SIZE)?;
-        Ok((
-            u32::from_le_bytes(data[0..4].try_into().unwrap()),
-            u32::from_le_bytes(data[4..8].try_into().unwrap())
-        ))
-    }
-
-    fn read_hash_pos(&self, pos: usize) -> CDBResult<(CDBHash, usize)> {
-        let (hash, pos) = self.read_pair(pos)?;
-        Ok((CDBHash(hash), pos as usize))
-    }
-
-    fn read_value_length(&self, pos: usize) -> CDBResult<(usize, usize)> {
-        let (klen, vlen) = self.read_pair(pos)?;
-        Ok((klen as usize, vlen as usize))
-    }
-
-    fn read_header(&self) -> CDBResult<[PosLen; ENTRIES]> {
-        let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
-        let header = self.get_data(0, PAIR_SIZE * ENTRIES)?;
-        let mut header_chunks = header.chunks_exact(core::mem::size_of::<u32>());
-        let mut empty = true;
-
-        for table in tables.iter_mut() {
-            *table = PosLen {
-                pos: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
-                len: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
-            );
-
-            if !table.valid(self.as_ref().len()) {
-                return Err(CDBReadError::InvalidFile);
-            }
-            empty &= table.len == 0;
-        }
-
-        if empty {
-            Err(CDBReadError::InvalidFile)
-        } else {
-            Ok(tables)
-        }
-    }
-
-    fn get_data(&self, pos: usize, len: usize) -> CDBResult<&[u8]> {
-        let res = self.as_ref().get(pos..pos + len).ok_or_else(|| {
-            CDBReadError::OutOfBounds
-        })?;
-        Ok(res)
-    }
-}
-
+pub trait CDBAccess: AsRef<[u8]> {}
 impl <T: AsRef<[u8]>> CDBAccess for T {}
 
 pub struct CDBReader<A> {
@@ -93,7 +40,7 @@ impl IterState
     #[inline]
     pub fn next<'c, A: CDBAccess>(&mut self, cdb: &'c CDBReader<A>) -> Option<CDBResult<(&'c [u8], &'c [u8])>> {
         if self.0 < cdb.tables[0].pos {
-            match cdb.get_data(self.0) {
+            match cdb.get_key_and_value(self.0) {
                 Ok((k, v, newpos)) => {
                     self.0 = newpos;
                     Some(Ok((k, v)))
@@ -181,7 +128,7 @@ impl LookupState {
         while let Some(tableidx) = self.iter.next() {
             let pos = self.table_pos + tableidx * PAIR_SIZE;
 
-            let (hash, ptr) = match cdb.access.read_hash_pos(pos) {
+            let (hash, ptr) = match cdb.read_hash_pos(pos) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -197,7 +144,7 @@ impl LookupState {
                 continue;
             }
 
-            let (k, v, _) = match cdb.get_data(ptr) {
+            let (k, v, _) = match cdb.get_key_and_value(ptr) {
                 Ok(v) => v,
                 Err(e) => {
                     self.done = true;
@@ -217,20 +164,20 @@ type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
 impl<A: CDBAccess> CDBReader<A> {
     pub fn new(access: A) -> CDBResult<CDBReader<A>> {
-        let tables = access.read_header()?;
+        let tables = Self::read_header(&access)?;
         Ok(CDBReader { access, tables })
     }
 
-    fn get_data(&self, pos: usize) -> CDBResult<KeyValueNext<'_>> {
-        let (klen, vlen) = self.access.read_value_length(pos)?;
+    fn get_key_and_value(&self, pos: usize) -> CDBResult<KeyValueNext<'_>> {
+        let (klen, vlen) = self.read_value_length(pos)?;
 
         let keystart = pos + PAIR_SIZE;
         let keyend = keystart + klen;
         let valend = keyend + vlen;
 
         Ok((
-            self.access.get_data(keystart, klen)?,
-            self.access.get_data(keyend, vlen)?,
+            Self::get_data(&self.access, keystart, klen)?,
+            Self::get_data(&self.access, keyend, vlen)?,
             valend,
         ))
     }
@@ -248,6 +195,57 @@ impl<A: CDBAccess> CDBReader<A> {
     pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>
     {
         self.lookup(key).nth(0)
+    }
+
+    #[inline]
+    fn read_pair(&self, pos: usize) -> CDBResult<(u32, u32)> {
+        let data = Self::get_data(&self.access, pos, PAIR_SIZE)?;
+        Ok((
+            u32::from_le_bytes(data[0..4].try_into().unwrap()),
+            u32::from_le_bytes(data[4..8].try_into().unwrap())
+        ))
+    }
+
+    fn read_hash_pos(&self, pos: usize) -> CDBResult<(CDBHash, usize)> {
+        let (hash, pos) = self.read_pair(pos)?;
+        Ok((CDBHash(hash), pos as usize))
+    }
+
+    fn read_value_length(&self, pos: usize) -> CDBResult<(usize, usize)> {
+        let (klen, vlen) = self.read_pair(pos)?;
+        Ok((klen as usize, vlen as usize))
+    }
+
+    fn read_header(access: &A) -> CDBResult<[PosLen; ENTRIES]> {
+        let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
+        let header = Self::get_data(&access, 0, PAIR_SIZE * ENTRIES)?;
+        let mut header_chunks = header.chunks_exact(core::mem::size_of::<u32>());
+        let mut empty = true;
+
+        for table in tables.iter_mut() {
+            *table = PosLen {
+                pos: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
+                len: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
+            );
+
+            if !table.valid(access.as_ref().len()) {
+                return Err(CDBReadError::InvalidFile);
+            }
+            empty &= table.len == 0;
+        }
+
+        if empty {
+            Err(CDBReadError::InvalidFile)
+        } else {
+            Ok(tables)
+        }
+    }
+
+    fn get_data(access: &A, pos: usize, len: usize) -> CDBResult<&[u8]> {
+        let res = access.as_ref().get(pos..pos + len).ok_or_else(|| {
+            CDBReadError::OutOfBounds
+        })?;
+        Ok(res)
     }
 }
 
