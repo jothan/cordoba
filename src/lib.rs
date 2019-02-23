@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature="std"), no_std)]
 #![feature(try_from)]
 
+use core::hash::Hasher;
+
 mod read;
 
 #[cfg(feature = "std")]
@@ -31,25 +33,84 @@ impl PosLen {
     }
 }
 
+pub trait CDBFormat
+    where Self::Hash: CDBHasher + Into<usize> + Copy + Clone + PartialEq,
+          Self::Hash: Into<u32> + From<u32>,
+	  Self: Copy + Clone
+{
+    const NB_TABLES: usize;
+    type Hash;
+
+    #[inline]
+    fn table(hash: Self::Hash) -> usize {
+        Into::<usize>::into(hash) % Self::NB_TABLES
+    }
+
+    #[inline]
+    fn slot(hash: Self::Hash, tlen: usize) -> usize {
+        (Into::<usize>::into(hash) >> 8) % tlen
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct ClassicFormat();
+
+impl CDBFormat for ClassicFormat {
+    const NB_TABLES: usize = 256;
+    type Hash = CDBHash;
+}
+
 #[derive(Copy, Clone, PartialEq)]
-pub struct CDBHash(pub u32);
+pub struct CDBHash(u32);
 
-impl CDBHash {
-    fn new(d: &[u8]) -> Self {
-        let h = d
-            .iter()
-            .fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
-        CDBHash(h)
+pub trait CDBHasher: Hasher {
+    type Output;
+
+    fn hash(data: &[u8]) -> Self;
+    fn value(self) -> Self::Output;
+    fn zero() -> Self;
+}
+
+impl CDBHasher for CDBHash {
+    type Output = u32;
+
+    fn hash(data: &[u8]) -> Self {
+        let mut h = Self::default();
+        h.write(data);
+        h
     }
 
     #[inline]
-    fn table(self) -> usize {
-        self.0 as usize % ENTRIES
+    fn value(self) -> Self::Output {
+        self.0
     }
 
+    fn zero() -> Self {
+        Self(0)
+    }
+}
+
+impl Into<usize> for CDBHash {
     #[inline]
-    fn slot(self, tlen: usize) -> usize {
-        (self.0 as usize >> 8) % tlen
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Hasher for CDBHash {
+    fn write(&mut self, data: &[u8]) {
+        self.0 = data.iter()
+            .fold(self.0, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
+    }
+
+    fn finish(&self) -> u64 {
+        self.0.into()
+    }
+}
+
+impl Default for CDBHash {
+    fn default() -> Self {
+        CDBHash(5381)
     }
 }
 
@@ -62,5 +123,11 @@ impl core::fmt::Debug for CDBHash {
 impl From<CDBHash> for u32 {
     fn from(h: CDBHash) -> Self {
         h.0
+    }
+}
+
+impl From<u32> for CDBHash {
+    fn from(h: u32) -> Self {
+        CDBHash(h)
     }
 }

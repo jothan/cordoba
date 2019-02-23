@@ -13,7 +13,7 @@ use pyo3::{PyGCProtocol, PyVisit, PyTraverseError};
 use pyo3::types::{PyBytes, PyType, PyObjectRef};
 use pyo3::types::exceptions as exc;
 
-use cordoba::{CDBReader, CDBWriter, IterState, LookupState};
+use cordoba::{CDBReader, CDBWriter, IterState, LookupState, ClassicFormat};
 
 #[pyclass]
 pub struct Reader {
@@ -83,7 +83,7 @@ impl PyIterProtocol for FileIter {
 struct LookupIter {
     reader: Py<Reader>,
     key: Py<PyBytes>,
-    state: LookupState,
+    state: LookupState<ClassicFormat>,
 }
 
 #[pyproto]

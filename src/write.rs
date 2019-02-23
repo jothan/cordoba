@@ -5,28 +5,32 @@ use std::io::{Seek, SeekFrom, Write};
 use super::*;
 
 #[derive(Copy, Clone, Debug)]
-struct HashPos(CDBHash, u32);
+pub struct HashPos<F: CDBFormat> (F::Hash, u32);
 
-impl HashPos {
+impl <F: CDBFormat> HashPos<F>
+{
     #[inline]
     fn distance(self, tlen: usize, pos: usize) -> usize {
-        let startslot = self.0.slot(tlen);
+        let startslot = F::slot(self.0, tlen);
         pos.checked_sub(startslot).unwrap_or_else(|| pos + tlen - startslot)
     }
 }
 
 const FILLFACTOR: usize = 2;
 
-pub struct CDBWriter<T> {
+pub struct CDBWriter<T, F=ClassicFormat>
+    where F: CDBFormat,
+{
     file: T,
     pos: u64,
-    tables: Vec<Vec<HashPos>>,
+    tables: Vec<Vec<HashPos<F>>>,
     header: [PosLen; ENTRIES],
 }
 
-impl<T> CDBWriter<T>
+impl<T, F> CDBWriter<T, F>
 where
     T: Write + Seek,
+    F: CDBFormat,
 {
     pub fn new(mut file: T) -> Result<Self, std::io::Error> {
         let pos = (ENTRIES * PAIR_SIZE) as u64;
@@ -56,8 +60,8 @@ where
     }
 
     pub fn write(&mut self, k: &[u8], v: &[u8]) -> Result<(), std::io::Error> {
-        let hash = CDBHash::new(k);
-        let tableidx = hash.table();
+        let hash = F::Hash::hash(k);
+        let tableidx = F::table(hash);
 
         self.tables[tableidx].push(HashPos(hash, self.pos as u32));
 
@@ -77,9 +81,9 @@ where
         Ok(())
     }
 
-    fn finish_generic<F>(mut self, fill: F) -> Result<(), std::io::Error>
+    fn finish_generic<A>(mut self, fill: A) -> Result<(), std::io::Error>
     where
-        F: Fn(&[HashPos], &mut Vec<HashPos>),
+        A: Fn(&[HashPos<F>], &mut Vec<HashPos<F>>),
     {
         let mut tout = Vec::new();
 
@@ -107,15 +111,15 @@ where
     }
 
     pub fn finish_naive(self) -> Result<(), std::io::Error> {
-        self.finish_generic(fill_table_naive)
+        self.finish_generic(fill_table_naive::<F>)
     }
 
     pub fn finish_btree(self) -> Result<(), std::io::Error> {
-        self.finish_generic(fill_table_btree)
+        self.finish_generic(fill_table_btree::<F>)
     }
 
     pub fn finish_robinhood(self) -> Result<(), std::io::Error> {
-        self.finish_generic(fill_table_robinhood)
+        self.finish_generic(fill_table_robinhood::<F>)
     }
 
     pub fn into_file(self) -> T {
@@ -127,13 +131,13 @@ where
     }
 }
 
-fn fill_table_naive(input: &[HashPos], output: &mut Vec<HashPos>) {
+fn fill_table_naive<F: CDBFormat>(input: &[HashPos<F>], output: &mut Vec<HashPos<F>>) {
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(F::Hash::zero(), 0));
 
     for hp in input {
-        let (left, right) = output.split_at_mut(hp.0.slot(tlen));
+        let (left, right) = output.split_at_mut(F::slot(hp.0, tlen));
 
         for slot in right.iter_mut().chain(left.iter_mut()) {
             if slot.1 == 0 {
@@ -144,16 +148,16 @@ fn fill_table_naive(input: &[HashPos], output: &mut Vec<HashPos>) {
     }
 }
 
-fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
+fn fill_table_btree<F: CDBFormat>(input: &[HashPos<F>], output: &mut Vec<HashPos<F>>) {
     let mut cache = BTreeSet::new();
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(F::Hash::zero(), 0));
 
     cache.extend(0..tlen);
 
     for hp in input {
-        let startpos = hp.0.slot(tlen);
+        let startpos = F::slot(hp.0, tlen);
         let idx = *cache
             .range(startpos..)
             .chain(cache.range(0..startpos))
@@ -166,13 +170,13 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
     }
 }
 
-fn fill_table_robinhood(input: &[HashPos], output: &mut Vec<HashPos>) {
+fn fill_table_robinhood<F: CDBFormat>(input: &[HashPos<F>], output: &mut Vec<HashPos<F>>) {
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(F::Hash::zero(), 0));
 
     for mut hp in input.iter().cloned() {
-        let startslot = hp.0.slot(tlen);
+        let startslot = F::slot(hp.0, tlen);
         let (left, right) = output.split_at_mut(startslot);
         let mut slotnum = startslot;
         let mut distance = 0;

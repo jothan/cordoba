@@ -1,5 +1,6 @@
 use core::convert::TryInto;
 use core::iter::Chain;
+use core::marker::PhantomData;
 use core::ops::Range;
 
 use super::*;
@@ -14,9 +15,10 @@ type CDBResult<T> = Result<T, CDBReadError>;
 pub trait CDBAccess: AsRef<[u8]> {}
 impl <T: AsRef<[u8]>> CDBAccess for T {}
 
-pub struct CDBReader<A> {
+pub struct CDBReader<A, F=ClassicFormat> {
     access: A,
     tables: [PosLen; ENTRIES],
+    format: PhantomData<F>,
 }
 
 #[derive(Clone, Copy)]
@@ -29,16 +31,19 @@ impl Default for IterState {
 }
 
 #[derive(Clone)]
-pub struct FileIter<'a, A>
+pub struct FileIter<'a, A, F>
+    where F: CDBFormat
 {
-    cdb: &'a CDBReader<A>,
+    cdb: &'a CDBReader<A, F>,
     state: IterState,
 }
 
 impl IterState
 {
     #[inline]
-    pub fn next<'c, A: CDBAccess>(&mut self, cdb: &'c CDBReader<A>) -> Option<CDBResult<(&'c [u8], &'c [u8])>> {
+    pub fn next<'c, A, F>(&mut self, cdb: &'c CDBReader<A, F>) -> Option<CDBResult<(&'c [u8], &'c [u8])>>
+        where A: CDBAccess, F: CDBFormat,
+    {
         if self.0 < cdb.tables[0].pos {
             match cdb.get_key_and_value(self.0) {
                 Ok((k, v, newpos)) => {
@@ -56,7 +61,9 @@ impl IterState
     }
 }
 
-impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
+impl <'a, A, F> Iterator for FileIter<'a, A, F>
+    where A: CDBAccess, F: CDBFormat
+{
     type Item = CDBResult<(&'a [u8], &'a [u8])>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -65,15 +72,16 @@ impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
 }
 
 #[derive(Clone)]
-struct LookupIter<'c,  A>
+struct LookupIter<'c,  A, F>
+    where F: CDBFormat
 {
-    cdb: &'c CDBReader<A>,
+    cdb: &'c CDBReader<A, F>,
     key: &'c [u8],
-    state: LookupState,
+    state: LookupState<F>,
 }
 
-impl <'c, A> LookupIter<'c, A> {
-    fn new(cdb: &'c CDBReader<A>, key: &'c [u8]) -> Self {
+impl <'c, A, F: CDBFormat> LookupIter<'c, A, F> {
+    fn new(cdb: &'c CDBReader<A, F>, key: &'c [u8]) -> Self {
         LookupIter {
             cdb,
             key,
@@ -82,7 +90,9 @@ impl <'c, A> LookupIter<'c, A> {
     }
 }
 
-impl <'c, A: CDBAccess> Iterator for LookupIter<'c, A> {
+impl <'c, A, F> Iterator for LookupIter<'c, A, F>
+    where A: CDBAccess, F: CDBFormat
+{
     type Item = CDBResult<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -91,21 +101,21 @@ impl <'c, A: CDBAccess> Iterator for LookupIter<'c, A> {
 }
 
 #[derive(Clone)]
-pub struct LookupState {
+pub struct LookupState<F: CDBFormat> {
     table_pos: usize,
-    khash: CDBHash,
+    khash: F::Hash,
     iter: Chain<Range<usize>, Range<usize>>,
     done: bool,
 }
 
-impl LookupState {
+impl <F: CDBFormat> LookupState<F> {
     #[inline]
-    pub fn new<A>(cdb: &CDBReader<A>, key: &[u8]) -> Self {
-        let khash = CDBHash::new(key);
-        let table = cdb.tables[khash.table()];
+    pub fn new<A>(cdb: &CDBReader<A, F>, key: &[u8]) -> Self {
+        let khash = F::Hash::hash(key);
+        let table = cdb.tables[F::table(khash)];
 
         let start_pos = if table.len != 0 {
-            khash.slot(table.len)
+            F::slot(khash, table.len)
         } else {
             0
         };
@@ -120,7 +130,9 @@ impl LookupState {
     }
 
     #[inline]
-    pub fn next<'a, A: CDBAccess>(&mut self, cdb: &'a CDBReader<A>, key: &[u8]) -> Option<CDBResult<&'a [u8]>> {
+    pub fn next<'a, A>(&mut self, cdb: &'a CDBReader<A, F>, key: &[u8]) -> Option<CDBResult<&'a [u8]>>
+        where A: CDBAccess
+    {
         if self.done {
             return None;
         }
@@ -162,10 +174,13 @@ impl LookupState {
 
 type KeyValueNext<'c> = (&'c [u8], &'c [u8], usize);
 
-impl<A: CDBAccess> CDBReader<A> {
-    pub fn new(access: A) -> CDBResult<CDBReader<A>> {
+impl<A, F> CDBReader<A, F>
+    where A: CDBAccess,
+          F: CDBFormat,
+{
+    pub fn new(access: A) -> CDBResult<CDBReader<A, F>> {
         let tables = Self::read_header(&access)?;
-        Ok(CDBReader { access, tables })
+        Ok(CDBReader { access, tables, format: PhantomData })
     }
 
     fn get_key_and_value(&self, pos: usize) -> CDBResult<KeyValueNext<'_>> {
@@ -206,9 +221,9 @@ impl<A: CDBAccess> CDBReader<A> {
         ))
     }
 
-    fn read_hash_pos(&self, pos: usize) -> CDBResult<(CDBHash, usize)> {
+    fn read_hash_pos(&self, pos: usize) -> CDBResult<(F::Hash, usize)> {
         let (hash, pos) = self.read_pair(pos)?;
-        Ok((CDBHash(hash), pos as usize))
+        Ok((hash.into(), pos as usize))
     }
 
     fn read_value_length(&self, pos: usize) -> CDBResult<(usize, usize)> {
@@ -216,7 +231,8 @@ impl<A: CDBAccess> CDBReader<A> {
         Ok((klen as usize, vlen as usize))
     }
 
-    fn read_header(access: &A) -> CDBResult<[PosLen; ENTRIES]> {
+    fn read_header(access: &A) -> CDBResult<[PosLen; ENTRIES]>
+    {
         let mut tables: [PosLen; ENTRIES] = [PosLen { pos: 0, len: 0 }; ENTRIES];
         let header = Self::get_data(&access, 0, PAIR_SIZE * ENTRIES)?;
         let mut header_chunks = header.chunks_exact(core::mem::size_of::<u32>());
@@ -249,11 +265,13 @@ impl<A: CDBAccess> CDBReader<A> {
     }
 }
 
-impl <'a, A: CDBAccess> IntoIterator for &'a CDBReader<A> {
-    type IntoIter = FileIter<'a, A>;
-    type Item = <FileIter<'a, A> as Iterator>::Item;
+impl <'a, A, F> IntoIterator for &'a CDBReader<A, F>
+    where A: CDBAccess, F: CDBFormat
+{
+    type IntoIter = FileIter<'a, A, F>;
+    type Item = <FileIter<'a, A, F> as Iterator>::Item;
 
-    fn into_iter(self) -> FileIter<'a, A>
+    fn into_iter(self) -> FileIter<'a, A, F>
     {
         FileIter{cdb: self, state: Default::default()}
     }

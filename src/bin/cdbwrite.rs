@@ -5,8 +5,8 @@ use std::io::BufWriter;
 use cordoba::CDBWriter;
 
 fn main() {
-    let mut file = BufWriter::new(File::create("truc.cdb").unwrap());
-    let mut cdb = CDBWriter::new(&mut file).unwrap();
+    let file = BufWriter::new(File::create("truc.cdb").unwrap());
+    let mut cdb : CDBWriter<_> = CDBWriter::new(file).unwrap();
 
     for x in 0..10000 {
         let k = format!("#{:05} potato", x / 2);
