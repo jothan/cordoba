@@ -255,6 +255,7 @@ impl<A: CDBAccess> CDBReader<A> {
     }
 }
 
+#[cfg(feature = "std")]
 pub trait CDBRead
 {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=CDBResult<(&'a [u8], &'a [u8])>> + 'a>;
@@ -262,6 +263,7 @@ pub trait CDBRead
     fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>;
 }
 
+#[cfg(feature = "std")]
 impl <A: CDBAccess> CDBRead for CDBReader<A> {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=CDBResult<(&'a [u8], &'a [u8])>> + 'a>
     {
