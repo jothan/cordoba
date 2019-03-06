@@ -249,6 +249,30 @@ impl<A: CDBAccess> CDBReader<A> {
     }
 }
 
+pub trait CDBRead
+{
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=CDBResult<(&'a [u8], &'a [u8])>> + 'a>;
+    fn lookup<'a>(&'a self, key: &'a [u8]) -> Box<dyn Iterator<Item=CDBResult<&'a [u8]>> + 'a>;
+    fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>;
+}
+
+impl <A: CDBAccess> CDBRead for CDBReader<A> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=CDBResult<(&'a [u8], &'a [u8])>> + 'a>
+    {
+        Box::new(CDBReader::iter(self))
+    }
+
+    fn lookup<'a>(&'a self, key: &'a [u8]) -> Box<dyn Iterator<Item=CDBResult<&'a [u8]>> + 'a>
+    {
+        Box::new(CDBReader::lookup(self, key))
+    }
+
+    fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>
+    {
+        CDBReader::get(self, key)
+    }
+}
+
 impl <'a, A: CDBAccess> IntoIterator for &'a CDBReader<A> {
     type IntoIter = FileIter<'a, A>;
     type Item = <FileIter<'a, A> as Iterator>::Item;
