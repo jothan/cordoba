@@ -35,6 +35,12 @@ pub struct FileIter<'a, A>
     state: IterState,
 }
 
+impl <'a, A> FileIter<'a, A> {
+    fn new(cdb: &'a CDBReader<A>) -> Self {
+        FileIter{cdb, state: Default::default()}
+    }
+}
+
 impl IterState
 {
     #[inline]
@@ -184,7 +190,7 @@ impl<A: CDBAccess> CDBReader<A> {
 
     pub fn iter(&self) -> impl Iterator<Item=CDBResult<(&'_ [u8], &'_ [u8])>>
     {
-        FileIter{cdb: self, state: Default::default()}
+        FileIter::new(self)
     }
 
     pub fn lookup<'a>(&'a self, key: &'a [u8]) -> impl Iterator<Item=CDBResult<&'_ [u8]>>
@@ -279,7 +285,7 @@ impl <'a, A: CDBAccess> IntoIterator for &'a CDBReader<A> {
 
     fn into_iter(self) -> FileIter<'a, A>
     {
-        FileIter{cdb: self, state: Default::default()}
+        FileIter::new(self)
     }
 }
 
