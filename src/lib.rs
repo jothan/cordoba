@@ -36,7 +36,6 @@ impl PosLen {
 pub trait CDBFormat
     where Self::Hash: CDBHasher + Into<usize> + Copy + Clone + PartialEq,
           Self::Hash: Into<u32> + From<u32>,
-	  Self: Copy + Clone
 {
     const NB_TABLES: usize;
     type Hash;
@@ -51,6 +50,7 @@ pub trait CDBFormat
         (Into::<usize>::into(hash) >> 8) % tlen
     }
 }
+
 
 #[derive(Copy, Clone)]
 pub struct ClassicFormat();
