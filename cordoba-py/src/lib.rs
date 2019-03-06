@@ -1,4 +1,4 @@
-#![feature(specialization, try_from)]
+#![feature(specialization)]
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
