@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature="std"), no_std)]
+#![warn(rust_2018_idioms)]
 
 mod read;
 
@@ -53,7 +54,7 @@ impl CDBHash {
 }
 
 impl core::fmt::Debug for CDBHash {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "CDBHash(0x{:08x})", self.0)
     }
 }

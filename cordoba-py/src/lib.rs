@@ -1,4 +1,6 @@
 #![feature(specialization)]
+#![warn(rust_2018_idioms)]
+
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
@@ -23,7 +25,7 @@ pub struct Reader {
 #[pymethods]
 impl Reader {
     #[new]
-    fn __new__(obj: &PyRawObject, fname: PyObject, py: Python) -> PyResult<()> {
+    fn __new__(obj: &PyRawObject, fname: PyObject, py: Python<'_>) -> PyResult<()> {
         let path : &str = py.import("os")?.call1("fsdecode", (fname,))?.extract()?;
         let file = File::open(path)?;
         let map = unsafe { Mmap::map(&file) }?;
@@ -195,7 +197,7 @@ impl PyMappingProtocol for Writer {
 
 #[pyproto]
 impl PyGCProtocol for Writer {
-    fn __traverse__(&self, visit: PyVisit) -> Result<(), PyTraverseError> {
+    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         if let Some(ref writer) = self.inner {
             visit.call(&writer.get_file().0)?
         }
@@ -226,7 +228,7 @@ impl<'p> PyContextProtocol<'p> for Writer {
 }
 
 #[pymodule]
-fn cordoba(_py: Python, m: &PyModule) -> PyResult<()> {
+fn cordoba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<Reader>()?;
     m.add_class::<Writer>()?;
     m.add_class::<FileIter>()?;
