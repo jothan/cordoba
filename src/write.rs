@@ -5,7 +5,7 @@ use std::io::{Seek, SeekFrom, Write};
 use super::*;
 
 #[derive(Copy, Clone, Debug)]
-struct HashPos(CDBHash, u32);
+struct HashPos(Hash, u32);
 
 impl HashPos {
     #[inline]
@@ -17,14 +17,14 @@ impl HashPos {
 
 const FILLFACTOR: usize = 2;
 
-pub struct CDBWriter<T> {
+pub struct Writer<T> {
     file: T,
     pos: u64,
     tables: Vec<Vec<HashPos>>,
     header: [PosLen; ENTRIES],
 }
 
-impl<T> CDBWriter<T>
+impl<T> Writer<T>
 where
     T: Write + Seek,
 {
@@ -36,7 +36,7 @@ where
         for _ in 0..ENTRIES {
             tables.push(Vec::new());
         }
-        Ok(CDBWriter {
+        Ok(Writer {
             file,
             pos,
             tables,
@@ -56,7 +56,7 @@ where
     }
 
     pub fn write(&mut self, k: &[u8], v: &[u8]) -> Result<(), std::io::Error> {
-        let hash = CDBHash::new(k);
+        let hash = Hash::new(k);
         let tableidx = hash.table();
 
         self.tables[tableidx].push(HashPos(hash, self.pos as u32));
@@ -130,7 +130,7 @@ where
 fn fill_table_naive(input: &[HashPos], output: &mut Vec<HashPos>) {
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(Hash(0), 0));
 
     for hp in input {
         let (left, right) = output.split_at_mut(hp.0.slot(tlen));
@@ -148,7 +148,7 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
     let mut cache = BTreeSet::new();
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(Hash(0), 0));
 
     cache.extend(0..tlen);
 
@@ -169,7 +169,7 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
 fn fill_table_robinhood(input: &[HashPos], output: &mut Vec<HashPos>) {
     let tlen = input.len() * FILLFACTOR;
     output.clear();
-    output.resize(tlen, HashPos(CDBHash(0), 0));
+    output.resize(tlen, HashPos(Hash(0), 0));
 
     for mut hp in input.iter().cloned() {
         let startslot = hp.0.slot(tlen);

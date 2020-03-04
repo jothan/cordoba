@@ -1,16 +1,16 @@
 use std::fs::File;
 use std::io::Write;
 
-use cordoba::CDBReader;
+use cordoba::Reader;
 use memmap::Mmap;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 
-fn cdb_open(fname: &str) -> std::io::Result<CDBReader<Mmap>>
+fn cdb_open(fname: &str) -> std::io::Result<Reader<Mmap>>
 {
     let f = File::open(fname)?;
     let map = unsafe { Mmap::map(&f) }?;
-    Ok(CDBReader::new(map)?)
+    Ok(Reader::new(map)?)
 }
 
 fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {

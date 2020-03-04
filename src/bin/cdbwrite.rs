@@ -2,11 +2,11 @@
 use std::fs::File;
 use std::io::BufWriter;
 
-use cordoba::CDBWriter;
+use cordoba::Writer;
 
 fn main() {
     let mut file = BufWriter::new(File::create("truc.cdb").unwrap());
-    let mut cdb = CDBWriter::new(&mut file).unwrap();
+    let mut cdb = Writer::new(&mut file).unwrap();
 
     for x in 0..10000 {
         let k = format!("#{:05} potato", x / 2);

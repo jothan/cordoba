@@ -6,7 +6,7 @@ mod read;
 #[cfg(feature = "std")]
 mod write;
 #[cfg(feature = "std")]
-pub use self::write::CDBWriter;
+pub use self::write::Writer;
 
 pub use self::read::*;
 
@@ -32,14 +32,14 @@ impl PosLen {
 }
 
 #[derive(Copy, Clone, PartialEq)]
-pub struct CDBHash(pub u32);
+pub struct Hash(pub u32);
 
-impl CDBHash {
+impl Hash {
     fn new(d: &[u8]) -> Self {
         let h = d
             .iter()
             .fold(5381u32, |h, &c| (h << 5).wrapping_add(h) ^ u32::from(c));
-        CDBHash(h)
+        Hash(h)
     }
 
     #[inline]
@@ -53,14 +53,14 @@ impl CDBHash {
     }
 }
 
-impl core::fmt::Debug for CDBHash {
+impl core::fmt::Debug for Hash {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "CDBHash(0x{:08x})", self.0)
+        write!(f, "Hash(0x{:08x})", self.0)
     }
 }
 
-impl From<CDBHash> for u32 {
-    fn from(h: CDBHash) -> Self {
+impl From<Hash> for u32 {
+    fn from(h: Hash) -> Self {
         h.0
     }
 }
