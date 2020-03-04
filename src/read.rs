@@ -232,7 +232,7 @@ impl<A: CDBAccess> CDBReader<A> {
             *table = PosLen {
                 pos: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
                 len: u32::from_le_bytes(header_chunks.next().unwrap().try_into().unwrap()) as usize,
-            );
+            };
 
             if !table.valid(access.as_ref().len()) {
                 return Err(CDBReadError::InvalidFile);
