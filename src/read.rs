@@ -206,7 +206,7 @@ impl<A: CDBAccess> Reader<A> {
 
     pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>
     {
-        self.lookup(key).nth(0)
+        self.lookup(key).next()
     }
 
     #[inline]

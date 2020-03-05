@@ -157,7 +157,7 @@ fn fill_table_btree(input: &[HashPos], output: &mut Vec<HashPos>) {
         let idx = *cache
             .range(startpos..)
             .chain(cache.range(0..startpos))
-            .nth(0)
+            .next()
             .unwrap();
         cache.take(&idx);
 
