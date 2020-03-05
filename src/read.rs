@@ -19,6 +19,12 @@ pub struct Reader<A> {
     tables: [PosLen; ENTRIES],
 }
 
+impl<A> std::fmt::Debug for Reader<A> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(fmt, "Reader {{}}")
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct IterState(usize);
 
