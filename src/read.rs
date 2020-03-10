@@ -77,15 +77,15 @@ impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
 }
 
 #[derive(Clone)]
-struct LookupIter<'c,  A>
+struct LookupIter<'c, 'k, A>
 {
     cdb: &'c Reader<A>,
-    key: &'c [u8],
+    key: &'k [u8],
     state: LookupState,
 }
 
-impl <'c, A> LookupIter<'c, A> {
-    fn new(cdb: &'c Reader<A>, key: &'c [u8]) -> Self {
+impl <'c, 'k, A> LookupIter<'c, 'k, A> {
+    fn new(cdb: &'c Reader<A>, key: &'k [u8]) -> Self {
         LookupIter {
             cdb,
             key,
@@ -94,7 +94,7 @@ impl <'c, A> LookupIter<'c, A> {
     }
 }
 
-impl <'c, A: CDBAccess> Iterator for LookupIter<'c, A> {
+impl <'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
     type Item = CDBResult<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -199,14 +199,14 @@ impl<A: CDBAccess> Reader<A> {
         FileIter::new(self)
     }
 
-    pub fn lookup<'a>(&'a self, key: &'a [u8]) -> impl Iterator<Item=CDBResult<&'_ [u8]>>
+    pub fn lookup<'k, 'c: 'k>(&'c self, key: &'k [u8]) -> impl Iterator<Item=CDBResult<&'c [u8]>> + 'k
     {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'a>(&'a self, key: &'a [u8]) -> Option<CDBResult<&'a[u8]>>
+    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> CDBResult<Option<&'c [u8]>>
     {
-        self.lookup(key).next()
+        self.lookup(key).next().transpose()
     }
 
     #[inline]
