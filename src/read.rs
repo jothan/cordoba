@@ -12,7 +12,7 @@ pub enum ReadError {
 
 type CDBResult<T> = Result<T, ReadError>;
 pub trait CDBAccess: AsRef<[u8]> {}
-impl <T: AsRef<[u8]>> CDBAccess for T {}
+impl<T: AsRef<[u8]>> CDBAccess for T {}
 
 pub struct Reader<A> {
     access: A,
@@ -35,22 +35,26 @@ impl Default for IterState {
 }
 
 #[derive(Clone)]
-pub struct FileIter<'a, A>
-{
+pub struct FileIter<'a, A> {
     cdb: &'a Reader<A>,
     state: IterState,
 }
 
-impl <'a, A> FileIter<'a, A> {
+impl<'a, A> FileIter<'a, A> {
     fn new(cdb: &'a Reader<A>) -> Self {
-        FileIter{cdb, state: Default::default()}
+        FileIter {
+            cdb,
+            state: Default::default(),
+        }
     }
 }
 
-impl IterState
-{
+impl IterState {
     #[inline]
-    pub fn next<'c, A: CDBAccess>(&mut self, cdb: &'c Reader<A>) -> Option<CDBResult<(&'c [u8], &'c [u8])>> {
+    pub fn next<'c, A: CDBAccess>(
+        &mut self,
+        cdb: &'c Reader<A>,
+    ) -> Option<CDBResult<(&'c [u8], &'c [u8])>> {
         if self.0 < cdb.tables[0].pos {
             match cdb.get_key_and_value(self.0) {
                 Ok((k, v, newpos)) => {
@@ -68,7 +72,7 @@ impl IterState
     }
 }
 
-impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
+impl<'a, A: CDBAccess> Iterator for FileIter<'a, A> {
     type Item = CDBResult<(&'a [u8], &'a [u8])>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -77,24 +81,23 @@ impl <'a, A: CDBAccess> Iterator for FileIter<'a, A> {
 }
 
 #[derive(Clone)]
-struct LookupIter<'c, 'k, A>
-{
+struct LookupIter<'c, 'k, A> {
     cdb: &'c Reader<A>,
     key: &'k [u8],
     state: LookupState,
 }
 
-impl <'c, 'k, A> LookupIter<'c, 'k, A> {
+impl<'c, 'k, A> LookupIter<'c, 'k, A> {
     fn new(cdb: &'c Reader<A>, key: &'k [u8]) -> Self {
         LookupIter {
             cdb,
             key,
-            state: LookupState::new(cdb, key)
+            state: LookupState::new(cdb, key),
         }
     }
 }
 
-impl <'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
+impl<'c, 'k, A: CDBAccess> Iterator for LookupIter<'c, 'k, A> {
     type Item = CDBResult<&'c [u8]>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -132,7 +135,11 @@ impl LookupState {
     }
 
     #[inline]
-    pub fn next<'a, A: CDBAccess>(&mut self, cdb: &'a Reader<A>, key: &[u8]) -> Option<CDBResult<&'a [u8]>> {
+    pub fn next<'a, A: CDBAccess>(
+        &mut self,
+        cdb: &'a Reader<A>,
+        key: &[u8],
+    ) -> Option<CDBResult<&'a [u8]>> {
         if self.done {
             return None;
         }
@@ -194,18 +201,18 @@ impl<A: CDBAccess> Reader<A> {
         ))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=CDBResult<(&'_ [u8], &'_ [u8])>>
-    {
+    pub fn iter(&self) -> impl Iterator<Item = CDBResult<(&'_ [u8], &'_ [u8])>> {
         FileIter::new(self)
     }
 
-    pub fn lookup<'k, 'c: 'k>(&'c self, key: &'k [u8]) -> impl Iterator<Item=CDBResult<&'c [u8]>> + 'k
-    {
+    pub fn lookup<'k, 'c: 'k>(
+        &'c self,
+        key: &'k [u8],
+    ) -> impl Iterator<Item = CDBResult<&'c [u8]>> + 'k {
         LookupIter::new(self, key)
     }
 
-    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> CDBResult<Option<&'c [u8]>>
-    {
+    pub fn get<'c, 'k>(&'c self, key: &'k [u8]) -> CDBResult<Option<&'c [u8]>> {
         self.lookup(key).next().transpose()
     }
 
@@ -214,7 +221,7 @@ impl<A: CDBAccess> Reader<A> {
         let data = Self::get_data(&self.access, pos, PAIR_SIZE)?;
         Ok((
             u32::from_le_bytes(data[0..4].try_into().unwrap()),
-            u32::from_le_bytes(data[4..8].try_into().unwrap())
+            u32::from_le_bytes(data[4..8].try_into().unwrap()),
         ))
     }
 
@@ -254,19 +261,19 @@ impl<A: CDBAccess> Reader<A> {
     }
 
     fn get_data(access: &A, pos: usize, len: usize) -> CDBResult<&[u8]> {
-        let res = access.as_ref().get(pos..pos + len).ok_or_else(|| {
-            ReadError::OutOfBounds
-        })?;
+        let res = access
+            .as_ref()
+            .get(pos..pos + len)
+            .ok_or_else(|| ReadError::OutOfBounds)?;
         Ok(res)
     }
 }
 
-impl <'a, A: CDBAccess> IntoIterator for &'a Reader<A> {
+impl<'a, A: CDBAccess> IntoIterator for &'a Reader<A> {
     type IntoIter = FileIter<'a, A>;
     type Item = <FileIter<'a, A> as Iterator>::Item;
 
-    fn into_iter(self) -> FileIter<'a, A>
-    {
+    fn into_iter(self) -> FileIter<'a, A> {
         FileIter::new(self)
     }
 }
@@ -275,7 +282,9 @@ impl <'a, A: CDBAccess> IntoIterator for &'a Reader<A> {
 impl core::convert::From<ReadError> for pyo3::PyErr {
     fn from(error: ReadError) -> Self {
         match error {
-            ReadError::OutOfBounds => pyo3::exceptions::EOFError::py_err("Tried to read beyond end of file."),
+            ReadError::OutOfBounds => {
+                pyo3::exceptions::EOFError::py_err("Tried to read beyond end of file.")
+            }
             ReadError::InvalidFile => pyo3::exceptions::IOError::py_err("Invalid file data."),
         }
     }
@@ -287,7 +296,8 @@ impl std::convert::From<ReadError> for std::io::Error {
         match error {
             ReadError::OutOfBounds => std::io::ErrorKind::UnexpectedEof,
             ReadError::InvalidFile => std::io::ErrorKind::InvalidData,
-        }.into()
+        }
+        .into()
     }
 }
 

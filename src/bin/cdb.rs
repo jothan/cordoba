@@ -6,8 +6,7 @@ use memmap::Mmap;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 
-fn cdb_open(fname: &str) -> std::io::Result<Reader<Mmap>>
-{
+fn cdb_open(fname: &str) -> std::io::Result<Reader<Mmap>> {
     let f = File::open(fname)?;
     let map = unsafe { Mmap::map(&f) }?;
     Ok(Reader::new(map)?)
@@ -21,9 +20,9 @@ fn cmd_query(matches: &ArgMatches) -> std::io::Result<()> {
     let mut handle = stdout.lock();
 
     if let Some(recno) = recno {
-        let recno : usize = recno.parse().unwrap();
+        let recno: usize = recno.parse().unwrap();
         if recno == 0 {
-            return Ok(())
+            return Ok(());
         }
 
         if let Some(v) = reader.lookup(key).nth(recno - 1) {

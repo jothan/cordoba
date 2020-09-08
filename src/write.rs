@@ -1,6 +1,6 @@
-use std::mem;
 use std::collections::BTreeSet;
 use std::io::{Seek, SeekFrom, Write};
+use std::mem;
 
 use super::*;
 
@@ -11,7 +11,8 @@ impl HashPos {
     #[inline]
     fn distance(self, tlen: usize, pos: usize) -> usize {
         let startslot = self.0.slot(tlen);
-        pos.checked_sub(startslot).unwrap_or_else(|| pos + tlen - startslot)
+        pos.checked_sub(startslot)
+            .unwrap_or_else(|| pos + tlen - startslot)
     }
 }
 
@@ -90,7 +91,7 @@ where
                 len: tout.len(),
             };
             for row in &tout {
-                let hash : u32 = row.0.into();
+                let hash: u32 = row.0.into();
                 self.file.write_all(&hash.to_le_bytes())?;
                 self.file.write_all(&row.1.to_le_bytes())?;
             }

@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature="std"), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(rust_2018_idioms)]
 
 mod read;
@@ -26,7 +26,7 @@ impl PosLen {
 
         match data_end {
             None => false,
-            Some(end) => end <= datalen
+            Some(end) => end <= datalen,
         }
     }
 }
