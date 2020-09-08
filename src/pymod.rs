@@ -1,4 +1,3 @@
-#![warn(rust_2018_idioms)]
 
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -12,7 +11,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::{PyIterProtocol, PyMappingProtocol};
 
-use cordoba::{IterState, LookupState, Reader as CDBReader, Writer as CDBWriter};
+use crate::{IterState, LookupState, Reader as CDBReader, Writer as CDBWriter};
 
 #[pyclass]
 pub struct Reader {
@@ -207,6 +206,17 @@ impl<'p> PyContextProtocol<'p> for Writer {
         Ok(false)
     }
 }*/
+
+impl core::convert::From<crate::ReadError> for pyo3::PyErr {
+    fn from(error: crate::ReadError) -> Self {
+        match error {
+            crate::ReadError::OutOfBounds => {
+                pyo3::exceptions::EOFError::py_err("Tried to read beyond end of file.")
+            }
+            crate::ReadError::InvalidFile => pyo3::exceptions::IOError::py_err("Invalid file data."),
+        }
+    }
+}
 
 #[pymodule]
 fn cordoba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {

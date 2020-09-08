@@ -278,18 +278,6 @@ impl<'a, A: CDBAccess> IntoIterator for &'a Reader<A> {
     }
 }
 
-#[cfg(feature = "python")]
-impl core::convert::From<ReadError> for pyo3::PyErr {
-    fn from(error: ReadError) -> Self {
-        match error {
-            ReadError::OutOfBounds => {
-                pyo3::exceptions::EOFError::py_err("Tried to read beyond end of file.")
-            }
-            ReadError::InvalidFile => pyo3::exceptions::IOError::py_err("Invalid file data."),
-        }
-    }
-}
-
 #[cfg(feature = "std")]
 impl std::convert::From<ReadError> for std::io::Error {
     fn from(error: ReadError) -> Self {

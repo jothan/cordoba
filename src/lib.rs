@@ -8,6 +8,9 @@ mod write;
 #[cfg(feature = "std")]
 pub use self::write::Writer;
 
+#[cfg(feature = "python")]
+mod pymod;
+
 pub use self::read::*;
 
 const ENTRIES: usize = 256;
