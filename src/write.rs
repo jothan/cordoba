@@ -31,12 +31,9 @@ where
 {
     pub fn new(mut file: T) -> Result<Self, std::io::Error> {
         let pos = (ENTRIES * PAIR_SIZE) as u64;
-        let mut tables = Vec::with_capacity(ENTRIES);
+        let tables = vec![Vec::new(); ENTRIES];
         file.seek(SeekFrom::Start(pos))?;
 
-        for _ in 0..ENTRIES {
-            tables.push(Vec::new());
-        }
         Ok(Writer {
             file,
             pos,

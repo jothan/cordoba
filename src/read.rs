@@ -264,7 +264,7 @@ impl<A: CDBAccess> Reader<A> {
         let res = access
             .as_ref()
             .get(pos..pos + len)
-            .ok_or_else(|| ReadError::OutOfBounds)?;
+            .ok_or(ReadError::OutOfBounds)?;
         Ok(res)
     }
 }
