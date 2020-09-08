@@ -75,7 +75,7 @@ where
         Ok(())
     }
 
-    fn finish_generic<F>(mut self, fill: F) -> Result<(), std::io::Error>
+    fn finish_generic<F>(mut self, fill: F) -> Result<T, std::io::Error>
     where
         F: Fn(&[HashPos], &mut Vec<HashPos>),
     {
@@ -97,22 +97,22 @@ where
         self.write_header()?;
         self.file.flush()?;
 
-        Ok(())
+        Ok(self.file)
     }
 
-    pub fn finish(self) -> Result<(), std::io::Error> {
+    pub fn finish(self) -> Result<T, std::io::Error> {
         self.finish_robinhood()
     }
 
-    pub fn finish_naive(self) -> Result<(), std::io::Error> {
+    pub fn finish_naive(self) -> Result<T, std::io::Error> {
         self.finish_generic(fill_table_naive)
     }
 
-    pub fn finish_btree(self) -> Result<(), std::io::Error> {
+    pub fn finish_btree(self) -> Result<T, std::io::Error> {
         self.finish_generic(fill_table_btree)
     }
 
-    pub fn finish_robinhood(self) -> Result<(), std::io::Error> {
+    pub fn finish_robinhood(self) -> Result<T, std::io::Error> {
         self.finish_generic(fill_table_robinhood)
     }
 
@@ -120,7 +120,7 @@ where
         self.file
     }
 
-    pub fn get_file(&self) -> &T {
+    pub fn file(&self) -> &T {
         &self.file
     }
 }

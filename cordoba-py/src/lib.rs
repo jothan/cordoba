@@ -1,21 +1,18 @@
-#![feature(specialization)]
 #![warn(rust_2018_idioms)]
 
-use std::convert::TryFrom;
-use std::fs::File;
-use std::io;
-use std::io::{ErrorKind, Write, Seek};
+use std::cell::RefCell;
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Write};
+use std::os::unix::io::AsRawFd;
 
 use memmap::Mmap;
 
+use pyo3::exceptions::{KeyError, ValueError};
 use pyo3::prelude::*;
-use pyo3::{IntoPyTuple, PyRawObject};
-use pyo3::{PyIterProtocol, PyMappingProtocol, PyContextProtocol};
-use pyo3::{PyGCProtocol, PyVisit, PyTraverseError};
-use pyo3::types::{PyBytes, PyType, PyObjectRef};
-use pyo3::types::exceptions as exc;
+use pyo3::types::PyBytes;
+use pyo3::{PyIterProtocol, PyMappingProtocol};
 
-use cordoba::{CDBReader, CDBWriter, IterState, LookupState};
+use cordoba::{IterState, LookupState, Reader as CDBReader, Writer as CDBWriter};
 
 #[pyclass]
 pub struct Reader {
@@ -25,35 +22,47 @@ pub struct Reader {
 #[pymethods]
 impl Reader {
     #[new]
-    fn __new__(obj: &PyRawObject, fname: PyObject, py: Python<'_>) -> PyResult<()> {
-        let path : &str = py.import("os")?.call1("fsdecode", (fname,))?.extract()?;
+    fn new(fname: PyObject, py: Python<'_>) -> PyResult<Self> {
+        let path: &str = py.import("os")?.call1("fsdecode", (fname,))?.extract()?;
         let file = File::open(path)?;
         let map = unsafe { Mmap::map(&file) }?;
         let reader = CDBReader::new(map)?;
-        obj.init(|| Reader { inner: reader })
+        Ok(Reader { inner: reader })
     }
 
-    fn get_all(&self, key: &PyBytes) -> LookupIter {
-        LookupIter{reader: self.into(),
-                   key: key.into(),
-                   state: LookupState::new(&self.inner, key.as_bytes())}
+    fn get_all(slf: PyRef<'_, Self>, key: &PyBytes) -> LookupIter {
+        let state = RefCell::new(LookupState::new(&slf.inner, key.as_bytes()));
+
+        LookupIter {
+            reader: slf.into(),
+            key: key.into(),
+            state,
+        }
     }
 }
 
 #[pyproto]
 impl PyMappingProtocol for Reader {
-    fn __getitem__(&self, key: &PyBytes) -> PyResult<PyObject> {
+    fn __getitem__(&self, key: &PyBytes) -> PyResult<Py<PyBytes>> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        match self.inner.get(key.as_bytes()) {
-            Some(Ok(r)) => Ok(PyBytes::new(py, &r).into()),
-            Some(Err(e)) => Err(e.into()),
-            None => Err(exc::KeyError::py_err(key.to_object(py))),
+        match self.inner.get(key.as_bytes())? {
+            Some(r) => Ok(PyBytes::new(py, &r).into()),
+            None => Err(KeyError::py_err(key.to_object(py))),
         }
     }
 }
 
+#[pyproto]
+impl PyIterProtocol for Reader {
+    fn __iter__(slf: PyRef<Self>) -> PyResult<FileIter> {
+        Ok(FileIter {
+            reader: slf.into(),
+            state: Default::default(),
+        })
+    }
+}
 
 #[pyclass]
 pub struct FileIter {
@@ -63,19 +72,29 @@ pub struct FileIter {
 
 #[pyproto]
 impl PyIterProtocol for FileIter {
-    fn __iter__(&mut self) -> PyResult<PyObject> {
-        Ok(self.into())
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<Self>> {
+        Ok(slf.into())
     }
 
-    fn __next__(&mut self) -> PyResult<Option<PyObject>> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        match self.state.next(&self.reader.as_ref(py).inner) {
+    fn __next__(mut slf: PyRefMut<Self>) -> PyResult<Option<(Py<PyBytes>, Py<PyBytes>)>> {
+        let reader = slf.reader.borrow(slf.py());
+        let mut state: IterState = slf.state;
+        match state.next(&reader.inner) {
             Some(Ok((k, v))) => {
-                Ok(Some((PyBytes::new(py, k), PyBytes::new(py, v)).into_tuple(py).into()))
+                let ret = Ok(Some((
+                    PyBytes::new(slf.py(), &k).into(),
+                    PyBytes::new(slf.py(), &v).into(),
+                )));
+                drop(reader);
+
+                slf.state = state;
+                ret
             }
-            Some(Err(e)) => Err(e.into()),
+            Some(Err(e)) => {
+                drop(reader);
+                slf.state = state;
+                Err(e.into())
+            }
             None => Ok(None),
         }
     }
@@ -85,147 +104,109 @@ impl PyIterProtocol for FileIter {
 struct LookupIter {
     reader: Py<Reader>,
     key: Py<PyBytes>,
-    state: LookupState,
+    state: RefCell<LookupState>,
 }
 
 #[pyproto]
 impl PyIterProtocol for LookupIter {
-    fn __iter__(&mut self) -> PyResult<PyObject> {
-        Ok(self.into())
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<Self>> {
+        Ok(slf.into())
     }
 
-    fn __next__(&mut self) -> PyResult<Option<PyObject>> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
+    fn __next__(slf: PyRef<Self>) -> PyResult<Option<Py<PyBytes>>> {
+        let py = slf.py();
 
-        match self.state.next(&self.reader.as_ref(py).inner, self.key.as_ref(py).as_bytes()) {
-            Some(Ok(v)) => {
-                Ok(Some(PyBytes::new(py, v).into()))
-            }
+        match slf
+            .state
+            .borrow_mut()
+            .next(&slf.reader.borrow(py).inner, slf.key.as_ref(py).as_bytes())
+        {
+            Some(Ok(v)) => Ok(Some(PyBytes::new(py, v).into())),
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }
     }
 }
 
-#[pyproto]
-impl PyIterProtocol for Reader
-{
-    fn __iter__(&mut self) -> PyResult<FileIter> {
-        Ok(FileIter{reader: self.into(), state: Default::default() })
-    }
-}
-
-
-#[pyclass(gc)]
+#[pyclass]
 pub struct Writer {
-    inner: Option<CDBWriter<PyFile>>,
-}
-
-struct PyFile(PyObject);
-
-impl Write for PyFile {
-    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        let written = self.0.call_method1(py, "write", (PyBytes::new(py, data),))?;
-        let res: usize = written.extract(py).map_err(|_| ErrorKind::InvalidData)?;
-        Ok(res)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        self.0.call_method0(py, "flush")?;
-        Ok(())
-    }
-}
-
-impl Seek for PyFile {
-    fn seek(&mut self, from: io::SeekFrom) -> io::Result<u64> {
-        let seek_args = match from {
-            io::SeekFrom::Start(pos) => {
-                (i64::try_from(pos).map_err(|_| ErrorKind::InvalidData)?, 0)
-            }
-            io::SeekFrom::Current(pos) => (pos, 1),
-            io::SeekFrom::End(pos) => (pos, 2),
-        };
-
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        let cur_pos = self.0.call_method1(py, "seek", seek_args)?;
-        let res : u64 = cur_pos.extract(py).map_err(|_| ErrorKind::InvalidData)?;
-        Ok(res)
-    }
+    inner: Option<CDBWriter<BufWriter<File>>>,
+    sync: bool,
 }
 
 #[pymethods]
 impl Writer {
     #[new]
-    fn __new__(obj: &PyRawObject, file: PyObject) -> PyResult<()> {
-        let writer = CDBWriter::new(PyFile(file))?;
-        obj.init(|| Writer { inner: Some(writer) })
+    #[args(sync = "true", exclusive = "true")]
+    fn new(fname: PyObject, sync: bool, exclusive: bool, py: Python<'_>) -> PyResult<Self> {
+        let path: &str = py.import("os")?.call1("fsdecode", (fname,))?.extract()?;
+        let file = BufWriter::new(
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .create_new(exclusive)
+                .open(path)?,
+        );
+
+        let writer = CDBWriter::new(file)?;
+
+        Ok(Writer {
+            inner: Some(writer),
+            sync,
+        })
+    }
+
+    fn fileno(&self) -> PyResult<i32> {
+        let writer = self.inner.as_ref().ok_or_else(closed_exc)?;
+        Ok(writer.file().get_ref().as_raw_fd())
     }
 
     fn close(&mut self) -> PyResult<()> {
-        let writer = self.inner.take().ok_or_else(Self::closed_exc)?;
+        let writer = self.inner.take().ok_or_else(closed_exc)?;
+        let mut file = writer.finish()?.into_inner()?;
+        file.flush()?;
 
-        writer.finish()?;
+        if self.sync {
+            file.sync_all()?;
+        }
+
         Ok(())
     }
 }
 
-impl Writer {
-    #[inline]
-    fn closed_exc() -> PyErr {
-        exc::ValueError::py_err("Writer is closed")
-    }
+#[inline]
+fn closed_exc() -> PyErr {
+    ValueError::py_err("Writer is closed")
 }
 
 #[pyproto]
 impl PyMappingProtocol for Writer {
     fn __setitem__(&mut self, key: &PyBytes, value: &PyBytes) -> PyResult<()> {
-        match &mut self.inner {
-            Some(ref mut w) => w.write(key.as_bytes(), value.as_bytes()).map_err(Into::into),
-            None => Err(Self::closed_exc())
-        }
-    }
-}
+        let writer = self.inner.as_mut().ok_or_else(closed_exc)?;
 
-#[pyproto]
-impl PyGCProtocol for Writer {
-    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
-        if let Some(ref writer) = self.inner {
-            visit.call(&writer.get_file().0)?
-        }
+        writer.write(key.as_bytes(), value.as_bytes())?;
+
         Ok(())
     }
-
-    fn __clear__(&mut self) {
-        self.inner.take();
-    }
 }
 
-#[pyproto]
+/*#[pyproto]
 impl<'p> PyContextProtocol<'p> for Writer {
-    fn __enter__(&mut self) -> PyResult<PyObject> {
-        Ok(self.into())
+    fn __enter__(&mut self) -> ??? {
+        todo!("Figure out how to return writer here")
     }
 
     fn __exit__(&mut self,
                 ty: Option<&'p PyType>,
-                _value: Option<&'p PyObjectRef>,
-                _traceback: Option<&'p PyObjectRef>,
+                _value: Option<PyObject>,
+                _traceback: Option<PyObject>,
     ) -> PyResult<bool> {
         if ty.is_none() {
             self.close()?;
         }
         Ok(false)
     }
-}
+}*/
 
 #[pymodule]
 fn cordoba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
