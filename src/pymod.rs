@@ -9,7 +9,7 @@ use memmap::Mmap;
 use pyo3::exceptions::{KeyError, ValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::{PyIterProtocol, PyMappingProtocol};
+use pyo3::{PyIterProtocol, PyMappingProtocol, PySequenceProtocol};
 
 use crate::{IterState, LookupState, Reader as CDBReader, Writer as CDBWriter};
 
@@ -50,6 +50,13 @@ impl PyMappingProtocol for Reader {
             Some(r) => Ok(PyBytes::new(py, &r).into()),
             None => Err(KeyError::py_err(key.to_object(py))),
         }
+    }
+}
+
+#[pyproto]
+impl PySequenceProtocol for Reader {
+    fn __contains__(&self, key: &PyBytes) -> PyResult<bool> {
+        Ok(self.inner.get(key.as_bytes())?.is_some())
     }
 }
 
